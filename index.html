@@ -1,398 +1,185 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
-<title>WD_BLACK Bike Computer — Mobile</title>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
+<title>WD_BLACK Bike Computer</title>
 
 <!-- Leaflet -->
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
-<!-- Polyline decoder for ORS encoded geometry fallback -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/@mapbox/polyline@1.1.1/src/polyline.js"></script>
-<!-- Fonts -->
+
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;800&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
 
 <style>
 :root{
-  --bg:#0c0c0e; --panel:#121214; --ink:#f4f4f6; --sub:#a7a7ad; --accent:#f2690d; --accent-2:#ff8a3d;
-  --ok:#41d18e; --warn:#f2c037; --bad:#ff5a5f;
+  --bg:#0c0c0e; --panel:#121214; --ink:#f4f4f6; --sub:#a7a7ad;
+  --accent:#f2690d; --accent-2:#ff8a3d; --ok:#41d18e;
 }
-html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);font-family:Montserrat,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial}
+html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);font-family:Montserrat,system-ui}
 #app{position:fixed;inset:0;display:flex;flex-direction:column;}
-.topbar{display:flex;align-items:center;gap:.5rem;padding:.6rem;background:linear-gradient(180deg,#0b0b0d,#070708);border-bottom:1px solid #171718}
-.brand{font-weight:800;letter-spacing:.12em;font-size:1rem}
-.brand span{color:var(--accent)}
-.controls{display:flex;gap:.5rem;align-items:center;flex:1;overflow:hidden}
-.chip{background:var(--panel);border:1px solid #1e1e22;border-radius:14px;padding:.35rem .6rem;display:flex;gap:.35rem;align-items:center}
-.chip input{background:transparent;border:none;outline:none;color:var(--ink);font-size:.92rem}
-.btn{cursor:pointer;background:linear-gradient(180deg,var(--accent),var(--accent-2));color:black;font-weight:700;border:none;border-radius:14px;padding:.5rem .7rem;font-size:.9rem;box-shadow:0 6px 16px rgba(242,105,13,.22)}
-.btn.flat{background:var(--panel);color:var(--ink);border:1px solid #2a2a30;box-shadow:none}
-.pill{display:flex;align-items:center;gap:.35rem;padding:.38rem .6rem;background:var(--panel);border:1px solid #2a2a30;border-radius:999px;font-size:.85rem}
-.pill .led{width:9px;height:9px;border-radius:50%;background:var(--warn)}.pill.ok .led{background:var(--ok)}
-#map{flex:1;position:relative}
-.stats{display:flex;gap:.5rem;padding:.55rem;background:linear-gradient(0deg,#0b0b0d,rgba(11,11,13,.6));border-top:1px solid #151516;align-items:center;flex-wrap:wrap}
-.card{flex:1;min-width:120px;background:var(--panel);border:1px solid #1f1f25;border-radius:12px;padding:.6rem .8rem;box-shadow: 0 6px 20px rgba(0,0,0,.25) inset}
-.label{font-size:.72rem;letter-spacing:.08em;color:var(--sub)}
-.value{font-family:"IBM Plex Mono",ui-monospace,monospace;font-weight:700;font-size:1.1rem}
-.value .unit{opacity:.75;font-size:.85rem}
 
-/* Floating buttons */
-.fabs{position:absolute;right:12px;bottom:92px;display:flex;flex-direction:column;gap:.45rem;z-index:600}
-.fab{width:48px;height:48px;border-radius:50%;display:grid;place-items:center;background:var(--panel);border:1px solid #262628;cursor:pointer;font-weight:700}
-.search-results{position:absolute;top:56px;left:90px;width:72vw;max-width:360px;background:var(--panel);border:1px solid #232326;border-radius:10px;max-height:40vh;overflow:auto;z-index:700;display:none}
-.search-results.visible{display:block}.search-results div{padding:.6rem;border-bottom:1px solid #1b1b1e;cursor:pointer}.search-results div:hover{background:#131314}
-
-/* mobile-first touch targets */
-@media (max-width:800px){
-  .brand{font-size:.9rem}
-  .btn{padding:.45rem .6rem;font-size:.85rem}
-  .chip input{width:8.5rem}
-  .search-results{left:86px;width:74vw}
-  .card{min-width:110px}
+#destOverlay{
+  position:fixed;inset:0;background:var(--bg);z-index:1000;
+  display:flex;align-items:center;justify-content:center;flex-direction:column;
 }
+#destOverlay h2{margin-bottom:1rem}
+#destOverlay input{padding:.6rem;border-radius:8px;border:1px solid #333;width:80%;max-width:360px;font-size:1rem}
+#destResults{width:80%;max-width:360px;background:var(--panel);margin-top:.5rem;border-radius:6px;max-height:40vh;overflow:auto;display:none}
+#destResults div{padding:.5rem;border-bottom:1px solid #222;cursor:pointer}
+#destResults div:hover{background:#191919}
+#confirmDest{margin-top:1rem;padding:.6rem 1rem;border:none;border-radius:8px;background:var(--accent);color:#000;font-weight:700;cursor:pointer}
 
-/* small helper styles for rotated map fallback */
-#map.rotate { transform-origin: 50% 50%; transition:transform .12s linear;}
+.topbar{display:flex;align-items:center;padding:.5rem;background:#111}
+.brand{font-weight:800;font-size:1rem}
+.brand span{color:var(--accent)}
+#map{flex:1}
+.stats{display:flex;gap:.5rem;padding:.5rem;background:#111;flex-wrap:wrap}
+.card{flex:1;min-width:120px;background:var(--panel);border-radius:10px;padding:.5rem .7rem}
+.label{font-size:.7rem;color:var(--sub)}
+.value{font-family:"IBM Plex Mono",monospace;font-weight:700;font-size:1.1rem}
+.value .unit{font-size:.8rem;opacity:.7}
 </style>
 </head>
 <body>
-<div id="app">
-  <div class="topbar">
-    <div class="brand"><span>BIKE</span>PC</div>
-    <div class="controls" style="gap:.6rem">
-      <div class="chip" title="Start (leave empty to use GPS)">
-        <input id="startInput" placeholder="Start (or use GPS)"/>
-        <button class="btn flat" id="useGpsBtn" title="Start GPS">GPS</button>
-      </div>
 
-      <div class="chip" style="position:relative">
-        <input id="destInput" placeholder="Find destination" autocomplete="off"/>
-        <div id="searchResults" class="search-results"></div>
-      </div>
+<!-- Destination Overlay -->
+<div id="destOverlay">
+  <h2>Select Destination</h2>
+  <input id="destSearch" placeholder="Search destination"/>
+  <div id="destResults"></div>
+  <button id="confirmDest" disabled>Confirm</button>
+</div>
 
-      <button class="btn" id="routeBtn">Start</button>
-
-      <div id="gpsStatus" class="pill" style="margin-left:6px"><span class="led"></span><span id="gpsText">GPS: Idle</span></div>
-    </div>
-  </div>
-
+<!-- Main App -->
+<div id="app" style="display:none;">
+  <div class="topbar"><div class="brand">WD_<span>BLACK</span> BIKE</div></div>
   <div id="map"></div>
-
   <div class="stats">
     <div class="card"><div class="label">Speed</div><div class="value" id="spd">0.0 <span class="unit">km/h</span></div></div>
-    <div class="card"><div class="label">Distance Left</div><div class="value" id="left">— <span class="unit">km</span></div></div>
-    <div class="card"><div class="label">ETA</div><div class="value" id="eta">—</div><div style="font-size:.75rem;color:var(--sub);margin-top:4px" id="etaClock"></div></div>
-    <div class="card"><div class="label">Total Distance</div><div class="value" id="total">— <span class="unit">km</span></div></div>
+    <div class="card"><div class="label">Distance Left</div><div class="value" id="left">— km</div></div>
+    <div class="card"><div class="label">ETA</div><div class="value" id="eta">—</div></div>
+    <div class="card"><div class="label">Total Distance</div><div class="value" id="total">— km</div></div>
   </div>
 </div>
 
-<!-- small modal to paste ORS key (stored in localStorage) -->
 <script>
-(function(){
-  // If user hasn't provided ORS key -> prompt once via simple prompt UI
-  const stored = localStorage.getItem('ORS_API_KEY') || '';
-  if (!stored || stored === 'PASTE_YOUR_ORS_API_KEY_HERE') {
-    // polite prompt — don't block UX, but show once per session
-    setTimeout(()=>{
-      const k = prompt("OpenRouteService API key (paste here). You can get one at https://openrouteservice.org (leave empty to use demo mode, but routing may fail).", "");
-      if (k !== null && k.trim()) localStorage.setItem('ORS_API_KEY', k.trim());
-    }, 700);
-  }
-})();
-</script>
-
-<script>
-/* ========== CONFIG ========== */
-const ORS_API_KEY = () => localStorage.getItem('ORS_API_KEY') || atob("NWIzY2UzNTk3ODUxMTEwMDAxY2Y2MjQ4NzgxMDdiYmE4ZWFiNDc1Njg5OWVhMThlMzY4N2FmNGE=");
-const ORS_PROFILE = 'cycling-regular'; // change if you prefer
 /* ========== HELPERS ========== */
-const km = m => m/1000;
-const fmtKm = m => (km(m)).toFixed(2);
-const fmtTime = secs => {
-  if (!isFinite(secs) || secs<=0) return '—';
-  const h = Math.floor(secs/3600); const m = Math.floor((secs%3600)/60);
-  return (h>0? h+'h ':'') + m + 'm';
-};
-const fmtClock = (secsFromNow) => {
-  if (!isFinite(secsFromNow) || secsFromNow<=0) return '—';
-  const t = new Date(Date.now()+secsFromNow*1000);
-  return t.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
-};
+const km = m=>m/1000;
+const fmtKm = m=>km(m).toFixed(2);
+const fmtTime = s=>!s?'—':Math.floor(s/60)+"m";
+const fmtClock = s=>{const t=new Date(Date.now()+s*1000);return t.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});};
 function haversine(a,b){
-  const R=6371000, toRad=d=>d*Math.PI/180;
-  const dLat=toRad(b[0]-a[0]), dLng=toRad(b[1]-a[1]);
-  const s1=Math.sin(dLat/2), s2=Math.sin(dLng/2);
-  const A = s1*s1 + Math.cos(toRad(a[0]))*Math.cos(toRad(b[0]))*s2*s2;
-  return 2*R*Math.atan2(Math.sqrt(A), Math.sqrt(1-A));
+  const R=6371000,toRad=d=>d*Math.PI/180;
+  const dLat=toRad(b[0]-a[0]),dLng=toRad(b[1]-a[1]);
+  const A=Math.sin(dLat/2)**2+Math.cos(toRad(a[0]))*Math.cos(toRad(b[0]))*Math.sin(dLng/2)**2;
+  return 2*R*Math.atan2(Math.sqrt(A),Math.sqrt(1-A));
 }
 function decodeGeometry(geom){
-  if (!geom) return [];
-  if (typeof geom === 'string'){
-    try{ return polyline.decode(geom).map(([lat,lng])=>[lat,lng]); }catch(e){ return []; }
-  }
-  if (geom.type === 'LineString' && Array.isArray(geom.coordinates)){
-    return geom.coordinates.map(([lng,lat])=>[lat,lng]);
-  }
-  return [];
+  try{ return polyline.decode(geom).map(([lat,lng])=>[lat,lng]); }catch(e){ return []; }
 }
 
-/* ========== MAP SETUP ========== */
-const map = L.map('map',{zoomControl:false,worldCopyJump:true}).setView([1.29027,103.851959],13);
-L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{maxZoom:20,attribution:'&copy; OpenStreetMap & CARTO'}).addTo(map);
-// layers
-const routeLayer = L.polyline([], {color:'#ff8a3d',weight:6,opacity:0.95}).addTo(map);
-const progLayer  = L.polyline([], {color:'#fefefe',weight:6,opacity:0.95,dashArray:'6 10'}).addTo(map);
-const startMarker = L.circleMarker([0,0], {radius:6, color:'#f2690d', fill:true, fillOpacity:1}).addTo(map);
-const destMarker  = L.circleMarker([0,0], {radius:6, color:'#ff8a3d', fill:true, fillOpacity: .55});
-const currentMarker = L.marker([0,0], {icon: L.divIcon({className:'currDot', html:'<div style="width:14px;height:14px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 2px #0c0c0e,0 0 14px rgba(65,209,142,.8)"></div>'})}).addTo(map);
+/* ========== MAP ========== */
+const map = L.map('map').setView([1.29,103.85],13);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
+const routeLayer = L.polyline([], {color:'#ff8a3d',weight:5}).addTo(map);
+
+// bike arrow
+const arrowIcon = L.divIcon({className:'',html:'<div id="bikeArrow" style="font-size:20px;transform:rotate(0deg)">⬆️</div>'});
+const currentMarker = L.marker([0,0], {icon:arrowIcon}).addTo(map);
+function updateHeading(deg){
+  const el=document.getElementById("bikeArrow");
+  if(el) el.style.transform=`rotate(${deg}deg)`;
+}
 
 /* ========== STATE ========== */
-let origin = null, destination = null;
-let routeCoords = [], totalDistanceM = 0, routeDurationS = 0;
-let lastPos = null, lastTime = null, manualSpeedMS = 0, watchId = null;
-let lastReroute = 0;
-let following = true;
-let lockNorth = false;
+let destination=null, routeCoords=[], totalDistanceM=0, routeDurationS=0;
+let lastPos=null,lastTime=null,speedMS=0;
 
-/* ========== UI REFS ========== */
-const spdEl = document.getElementById('spd'), leftEl = document.getElementById('left'), etaEl = document.getElementById('eta'),
-      totalEl = document.getElementById('total'), etaClock = document.getElementById('etaClock'), gpsStatus = document.getElementById('gpsStatus'),
-      gpsText = document.getElementById('gpsText');
-
-function setGpsStatus(ok, text){
-  gpsStatus.classList.toggle('ok', !!ok); gpsText.textContent = text || (ok? 'GPS: Ready' : 'GPS: Idle');
-}
-
-/* ========== SEARCH (Nominatim) ========== */
-const destInput = document.getElementById('destInput'), resultsBox = document.getElementById('searchResults');
-let searchTimer = null;
-async function searchPlaces(q){
-  const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&addressdetails=1&limit=8`;
-  try{
-    const res = await fetch(url, {headers:{'Accept-Language':navigator.language||'en'}});
-    if (!res.ok) return [];
-    return await res.json();
-  }catch(e){ return []; }
-}
-destInput.addEventListener('input', ()=>{
+/* ========== SEARCH ========== */
+const searchBox=document.getElementById('destSearch'),resultsBox=document.getElementById('destResults'),confirmBtn=document.getElementById('confirmDest');
+let searchTimer=null,selected=null;
+searchBox.addEventListener('input',()=>{
   clearTimeout(searchTimer);
-  const q = destInput.value.trim();
-  if (!q){ resultsBox.classList.remove('visible'); resultsBox.innerHTML=''; return; }
-  searchTimer = setTimeout(async ()=>{
-    const list = await searchPlaces(q);
-    resultsBox.innerHTML = list.map(item => `<div data-lat="${item.lat}" data-lon="${item.lon}"><strong>${item.display_name.split(',')[0]}</strong><br><span style="color:var(--sub);font-size:.8rem">${item.display_name}</span></div>`).join('');
-    resultsBox.classList.add('visible');
-  }, 300);
+  const q=searchBox.value.trim();
+  if(!q){resultsBox.style.display="none";return;}
+  searchTimer=setTimeout(async()=>{
+    const res=await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=5`);
+    const list=await res.json();
+    resultsBox.innerHTML=list.map(r=>`<div data-lat="${r.lat}" data-lon="${r.lon}">${r.display_name}</div>`).join('');
+    resultsBox.style.display="block";
+  },300);
 });
-resultsBox.addEventListener('click', (ev)=>{
-  const el = ev.target.closest('div'); if(!el) return;
-  const lat = parseFloat(el.getAttribute('data-lat')), lon = parseFloat(el.getAttribute('data-lon'));
-  destination = {lat:lat, lng:lon};
-  destMarker.setLatLng([lat,lon]).addTo(map);
-  map.flyTo([lat,lon],15,{duration:.5});
-  destInput.value = el.textContent.split('\n')[0];
-  resultsBox.classList.remove('visible');
+resultsBox.addEventListener('click',e=>{
+  const el=e.target.closest('div');if(!el)return;
+  selected={lat:parseFloat(el.dataset.lat),lng:parseFloat(el.dataset.lon)};
+  searchBox.value=el.textContent;
+  resultsBox.style.display="none";
+  confirmBtn.disabled=false;
+});
+confirmBtn.addEventListener('click',()=>{
+  if(!selected)return;
+  destination=selected;
+  document.getElementById('destOverlay').style.display="none";
+  document.getElementById('app').style.display="flex";
+  startGPS();
 });
 
-/* ========== GEOLOCATION ========== */
+/* ========== GPS + ROUTE ========== */
 function startGPS(){
-  if (!('geolocation' in navigator)) { setGpsStatus(false,'GPS: Unsupported'); return; }
-  if (watchId !== null) return; // already watching
-  watchId = navigator.geolocation.watchPosition(onPos, onPosErr, {enableHighAccuracy:true, maximumAge:1000, timeout:10000});
-  setGpsStatus(true,'GPS: Pending');
+  if(!navigator.geolocation)return;
+  navigator.geolocation.watchPosition(onPos,console.error,{enableHighAccuracy:true});
 }
-function stopGPS(){
-  if (watchId!==null){ navigator.geolocation.clearWatch(watchId); watchId=null; setGpsStatus(false,'GPS: Stopped'); }
-}
-function onPosErr(err){ setGpsStatus(false, 'GPS: '+ (err && err.message ? err.message : 'error')); }
-function onPos(pos){
-  const {latitude, longitude, speed, heading} = pos.coords;
-  navigator.geolocation.lastSpeedMS = (typeof speed==='number' && speed>=0) ? speed : navigator.geolocation.lastSpeedMS || 0;
-  const now = pos.timestamp || Date.now();
-  const cur = [latitude, longitude];
+async function onPos(pos){
+  const {latitude,longitude,speed}=pos.coords;
+  const cur=[latitude,longitude];
   currentMarker.setLatLng(cur);
-  if (!origin){ origin = {lat:latitude, lng:longitude}; startMarker.setLatLng([latitude, longitude]).addTo(map); map.setView(cur,15); }
-  if (lastPos){
-    const dt = (now - lastTime)/1000; if (dt>0) manualSpeedMS = Math.min(25, haversine(lastPos, cur)/dt);
+  map.setView(cur,15);
+  if(lastPos){
+    const dt=(pos.timestamp-lastTime)/1000;
+    if(dt>0) speedMS=haversine(lastPos,cur)/dt;
   }
-  lastPos = cur; lastTime = now;
-  setGpsStatus(true,'GPS: Tracking');
-  if (following) map.panTo(cur,{animate:true, duration:.14});
-  updateStats(cur);
-  // Smart reroute: every 20s OR if user deviates noticeably (we'll check perpendicular distance to route)
-  if (destination){
-    const t = Date.now();
-    const distFromRoute = calcDistFromRoute(cur);
-    if (t - lastReroute > 20000 || distFromRoute > 60){ lastReroute = t; routeFromTo({lat:latitude,lng:longitude}, destination, true); }
+  lastPos=cur; lastTime=pos.timestamp;
+  if(destination && !routeCoords.length){
+    await routeFromTo({lat:latitude,lng:longitude},destination);
   }
+  updateStats(cur,speed||speedMS);
+}
+async function routeFromTo(from,to){
+  const key=localStorage.getItem('ORS_API_KEY')||'';
+  if(!key){alert("Set ORS key in localStorage");return;}
+  const body={coordinates:[[from.lng,from.lat],[to.lng,to.lat]]};
+  const res=await fetch(`https://api.openrouteservice.org/v2/directions/cycling-regular`,{
+    method:'POST',headers:{'Authorization':key,'Content-Type':'application/json'},body:JSON.stringify(body)});
+  const data=await res.json();
+  const route=data.routes[0];
+  routeCoords=decodeGeometry(route.geometry);
+  routeLayer.setLatLngs(routeCoords);
+  totalDistanceM=route.summary.distance;
+  routeDurationS=route.summary.duration;
+}
+function updateStats(cur,spd){
+  document.getElementById('spd').innerHTML=(spd*3.6).toFixed(1)+" <span class='unit'>km/h</span>";
+  if(!routeCoords.length)return;
+  let distLeft=0;for(let i=0;i<routeCoords.length-1;i++)distLeft+=haversine(routeCoords[i],routeCoords[i+1]);
+  document.getElementById('left').textContent=fmtKm(distLeft)+" km";
+  document.getElementById('total').textContent=fmtKm(totalDistanceM)+" km";
+  const eta=spd>0?distLeft/spd:routeDurationS;
+  document.getElementById('eta').textContent=fmtTime(eta)+" ("+fmtClock(eta)+")";
 }
 
-/* distance from nearest route vertex (rough) */
-function nearestRouteIndex(point, coords){
-  if (!coords || coords.length===0) return 0;
-  let best=0, bestD=Infinity;
-  for (let i=0;i<coords.length;i++){
-    const d = haversine(point, coords[i]);
-    if (d < bestD){ bestD = d; best = i; }
-  }
-  return {index:best, dist:bestD};
+/* ========== ORIENTATION ========== */
+if(window.DeviceOrientationEvent){
+  window.addEventListener("deviceorientationabsolute",e=>{
+    if(e.alpha!=null) updateHeading(360-e.alpha);
+  });
+  window.addEventListener("deviceorientation",e=>{
+    const h=e.webkitCompassHeading||(e.alpha?360-e.alpha:null);
+    if(h!=null) updateHeading(h);
+  });
 }
-function calcDistFromRoute(pt){
-  if (!routeCoords.length) return Infinity;
-  return nearestRouteIndex(pt, routeCoords).dist;
-}
-function remainingDistanceFrom(point){
-  if (!routeCoords.length) return 0;
-  const idx = nearestRouteIndex(point, routeCoords).index;
-  let sum = 0;
-  for (let i=idx;i<routeCoords.length-1;i++) sum += haversine(routeCoords[i], routeCoords[i+1]);
-  return sum;
-}
-function updateStats(cur){
-  const distLeft = remainingDistanceFrom(cur || lastPos);
-  leftEl.textContent = fmtKm(distLeft) + ' km';
-  totalEl.textContent = (totalDistanceM? fmtKm(totalDistanceM) + ' km' : '—');
-  const deviceSpeed = (navigator.geolocation && navigator.geolocation.lastSpeedMS) || 0;
-  const spdMS = deviceSpeed > 0 ? deviceSpeed : manualSpeedMS;
-  const spdKmh = spdMS * 3.6;
-  spdEl.innerHTML = spdKmh.toFixed(1) + ' <span class="unit">km/h</span>';
-  // ETA: prefer real-time computed ETA if moving (speed>0.5 m/s)
-  const estSecs = (spdMS > 0.5) ? (distLeft / spdMS) : routeDurationS;
-  etaEl.textContent = fmtTime(estSecs);
-  etaClock.textContent = (estSecs>0 && estSecs<1e7) ? fmtClock(estSecs) : '';
-}
-
-/* ========== ROUTING (OpenRouteService) ========== */
-async function routeFromTo(from, to, silent=false){
-  const key = ORS_API_KEY();
-  if (!key || key==='5b3ce3597851110001cf624878107bba8eab4756899ea18e3687af4a'){ if(!silent) alert('Set OpenRouteService API key in localStorage (prompt appears on load).'); return; }
-  const body = {
-    coordinates: [[from.lng, from.lat], [to.lng, to.lat]],
-    instructions: true,
-    elevation: false,
-    preference: 'recommended'
-  };
-  try{
-    const res = await fetch(`https://api.openrouteservice.org/v2/directions/${ORS_PROFILE}`, {
-      method:'POST',
-      headers: {'Content-Type':'application/json','Authorization': key},
-      body: JSON.stringify(body)
-    });
-    if (!res.ok){ const txt = await res.text(); if(!silent) alert('Routing error: ' + txt); return; }
-    const data = await res.json();
-    const route = data && data.routes && data.routes[0];
-    if (!route){ if(!silent) alert('No route'); return; }
-    // decode geometry robustly
-    routeCoords = decodeGeometry(route.geometry);
-    // fallback if geometry absent: try segments steps (not ideal)
-    if (!routeCoords.length && route.segments && route.segments[0] && route.segments[0].steps){
-      routeCoords = route.segments[0].steps.flatMap(s => s.geometry ? decodeGeometry(s.geometry) : []).filter(Boolean);
-    }
-    routeLayer.setLatLngs(routeCoords);
-    startMarker.setLatLng([from.lat, from.lng]).addTo(map);
-    destMarker.setLatLng([to.lat, to.lng]).addTo(map);
-    if (route.bbox){
-      map.fitBounds([[route.bbox[1],route.bbox[0]],[route.bbox[3],route.bbox[2]]], {padding:[30,40]});
-    } else if (routeCoords.length) {
-      map.fitBounds(routeLayer.getBounds(), {padding:[30,40]});
-    }
-    // summary
-    totalDistanceM = (route.summary && route.summary.distance) || route.distance || 0;
-    routeDurationS  = (route.summary && route.summary.duration) || route.duration || 0;
-    // reset progress
-    progLayer.setLatLngs([]);
-    // initial stats update
-    updateStats(lastPos || [from.lat, from.lng]);
-  }catch(err){
-    if(!silent) alert('Routing error: '+err.message);
-  }
-}
-
-/* ========== UI WIRING ========== */
-document.getElementById('useGpsBtn').addEventListener('click', ()=>{
-  origin = null; startGPS();
-});
-document.getElementById('routeBtn').addEventListener('click', async ()=>{
-  if (!destination){ alert('Pick a destination first.'); return; }
-  const useGpsStart = !document.getElementById('startInput').value.trim();
-  if (useGpsStart && !lastPos){ alert('Waiting for GPS fix — allow location then press GPS button.'); return; }
-  let from = null;
-  if (useGpsStart){
-    from = {lat: lastPos[0], lng: lastPos[1]};
-  } else {
-    // geocode start
-    const q = document.getElementById('startInput').value.trim();
-    if (!q){ alert('Enter a start or use GPS'); return; }
-    const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=1`);
-    const j = await res.json();
-    if (!j || !j[0]){ alert('Could not resolve start'); return; }
-    from = {lat: parseFloat(j[0].lat), lng: parseFloat(j[0].lon)};
-  }
-  origin = from;
-  routeFromTo(from, destination);
-});
-
-/* ========== PROGRESS UI: dashed line from start to current position ========== */
-setInterval(()=>{
-  if (!routeCoords.length || !lastPos) return;
-  const idx = nearestRouteIndex(lastPos, routeCoords).index;
-  progLayer.setLatLngs(routeCoords.slice(0, idx));
-}, 900);
-
-/* ========== DEVICE ORIENTATION: rotate map or skip gracefully ========== */
-let lastBearing = 0;
-function setBearing(deg){
-  if (lockNorth) return;
-  lastBearing = deg;
-  // prefer map.setBearing if plugin available; fallback rotate container
-  const mapEl = document.getElementById('map');
-  mapEl.classList.add('rotate');
-  mapEl.style.transform = `rotate(${deg}deg)`;
-}
-// request permission for iOS 13+ & modern Safari
-async function requestOrientationPermission(){
-  if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function'){
-    try{
-      const resp = await DeviceOrientationEvent.requestPermission();
-      if (resp === 'granted') window.addEventListener('deviceorientationabsolute', (e)=>{ if (e.alpha!=null) setBearing(360-e.alpha); });
-    }catch(e){}
-  } else {
-    window.addEventListener('deviceorientationabsolute', (e)=>{ if (e.alpha!=null) setBearing(360-e.alpha); });
-    // fallback
-    window.addEventListener('deviceorientation', (e)=>{ const heading = e.webkitCompassHeading || (typeof e.alpha==='number' ? (360 - e.alpha) : null); if (heading!=null) setBearing(heading); });
-  }
-}
-requestOrientationPermission();
-
-/* ========== small UX touches ========== */
-// hide search results when clicking outside
-document.addEventListener('click', (e)=>{ if(!e.target.closest('.chip')) resultsBox.classList.remove('visible'); });
-
-// follow toggles
-map.on('dragstart', ()=>{ following=false; });
-map.on('zoomstart', ()=>{ following=false; });
-map.on('dblclick', ()=>{ following=true; });
-
-// compute eta every second if moving
-setInterval(()=>{
-  updateStats(lastPos || origin);
-}, 1000);
-
-/* ========== small keyboard fallback: Enter on dest triggers selection if only one result ========== */
-destInput.addEventListener('keydown', async (e)=>{
-  if (e.key === 'Enter'){
-    if (resultsBox.children.length === 1){
-      resultsBox.children[0].click();
-    } else {
-      // no single result, let user refine
-    }
-  }
-});
-
-/* ========== finish ========== */
-startGPS();
-
 </script>
 </body>
 </html>

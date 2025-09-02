@@ -1,0 +1,387 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <mega name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>On-the-Go Cycling Map with Enhanced UI in Singapore</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        body { 
+            margin: 0; 
+            padding: 0; 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            color: #333;
+        }
+        #map { 
+            height: 100vh; 
+            width: 100%; 
+        }
+        #controls { 
+            position: absolute; 
+            top: 20px; 
+            left: 50%; 
+            transform: translateX(-50%);
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(8px);
+            padding: 12px 20px; 
+            z-index: 1000; 
+            border-radius: 12px; 
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            display: flex;
+            align-items: center;
+            transition: opacity 0.3s ease, visibility 0.3s ease;
+        }
+        #controls.hidden {
+            opacity: 0;
+            visibility: hidden;
+        }
+        #info { 
+            position: absolute; 
+            top: 80px; 
+            left: 20px; 
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(8px);
+            padding: 12px 16px; 
+            z-index: 1000; 
+            border-radius: 10px; 
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            max-width: 300px;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+        #instructions { 
+            position: absolute; 
+            bottom: 20px; 
+            left: 20px; 
+            right: 20px; 
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(8px);
+            padding: 16px; 
+            max-height: 200px; 
+            overflow-y: auto; 
+            z-index: 1000; 
+            border-radius: 10px; 
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            font-size: 14px;
+        }
+        input { 
+            padding: 10px; 
+            width: 220px; 
+            border: 1px solid #ccc;
+            border-radius: 8px; 
+            font-size: 14px;
+            outline: none;
+            transition: border-color 0.2s ease;
+        }
+        input:focus {
+            border-color: #007bff;
+        }
+        button { 
+            padding: 10px 16px; 
+            background: #007bff; 
+            color: white; 
+            border: none; 
+            border-radius: 8px; 
+            font-size: 14px; 
+            cursor: pointer; 
+            transition: background 0.2s ease;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        h4 {
+            margin: 0 0 10px 0;
+            font-size: 16px;
+            color: #222;
+        }
+        ol { 
+            margin: 0; 
+            padding-left: 20px; 
+        }
+        li { 
+            margin-bottom: 8px; 
+            color: #444;
+        }
+        /* Custom scrollbar for instructions */
+        #instructions::-webkit-scrollbar {
+            width: 8px;
+        }
+        #instructions::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.1);
+            border-radius: 10px;
+        }
+        #instructions::-webkit-scrollbar-thumb {
+            background: #007bff;
+            border-radius: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div id="controls">
+        <input type="text" id="destination" placeholder="Enter destination (e.g., Changi Beach Park)">
+        <button onclick="searchAndRoute()">Search & Route</button>
+    </div>
+    <div id="info">Fetching location...</div>
+    <div id="instructions" style="display: none;">
+        <h4>Turn-by-Turn Instructions</h4>
+        <ol id="steps-list"></ol>
+    </div>
+    <div id="map"></div>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/leaflet-rotate@0.2.7/dist/leaflet-rotate.js"></script>
+    <script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
+    <script>
+        // Initialize map centered on Singapore
+        const map = L.map('map', {
+            zoomControl: true,
+            minZoom: 10,
+            maxZoom: 18,
+            rotate: true,
+            bearing: 0
+        }).setView([1.35, 103.85], 11);
+
+        // Add OpenStreetMap tiles
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(map);
+
+        // ORS API key (replace with your own)
+        const apiKey = 'YOUR_API_KEY'; // Replace with your actual ORS API key
+
+        // Global variables
+        let currentPosition = null;
+        let routeLayer = null;
+        let userMarker = null;
+        let destinationMarker = null;
+        let lastRouteUpdate = 0;
+        let destinationCoords = null;
+        let routeData = null;
+        let routeLine = null;
+
+        // DOM elements
+        const destinationInput = document.getElementById('destination');
+        const infoDiv = document.getElementById('info');
+        const instructionsDiv = document.getElementById('instructions');
+        const stepsList = document.getElementById('steps-list');
+        const controlsDiv = document.getElementById('controls');
+
+        // Geocoding function
+        async function geocodePlace(placeName) {
+            const url = `https://api.openrouteservice.org/geocode/search?api_key=${apiKey}&text=${encodeURIComponent(placeName)}&boundary.country=SGP`;
+            const response = await fetch(url);
+            if (!response.ok) throw new Error(`Geocoding error: ${response.status} - ${response.statusText}`);
+            const data = await response.json();
+            if (!data.features.length) throw new Error(`No results for "${placeName}"`);
+            return data.features[0].geometry.coordinates; // [lon, lat]
+        }
+
+        // Routing function
+        async function getCyclingRoute(startCoords, endCoords) {
+            const url = 'https://api.openrouteservice.org/v2/directions/cycling-regular';
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Authorization': apiKey,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    coordinates: [startCoords, endCoords],
+                    units: 'km',
+                    geometry_format: 'geojson',
+                    preference: 'recommended',
+                    extra_info: ['surface']
+                })
+            });
+            if (!response.ok) throw new Error(`Routing error: ${response.status} - ${response.statusText}`);
+            return await response.json();
+        }
+
+        // Display turn-by-turn instructions
+        function displayInstructions(steps) {
+            stepsList.innerHTML = '';
+            steps.forEach(step => {
+                const li = document.createElement('li');
+                li.textContent = `${step.instruction} (${step.distance.toFixed(2)} km, ${(step.duration / 60).toFixed(1)} min)`;
+                stepsList.appendChild(li);
+            });
+            instructionsDiv.style.display = 'block';
+        }
+
+        // Calculate remaining distance and ETA
+        function calculateRemaining() {
+            if (!routeLine || !currentPosition || !routeData) return {remainingDist: 0, remainingDuration: 0};
+            const point = turf.point(currentPosition);
+            const nearest = turf.nearestPointOnLine(routeLine, point);
+            const endPoint = turf.point(destinationCoords);
+            const slice = turf.lineSlice(nearest, endPoint, routeLine);
+            const remainingDist = turf.length(slice, {units: 'kilometers'});
+            const totalDist = routeData.features[0].properties.summary.distance;
+            const totalDuration = routeData.features[0].properties.summary.duration;
+            const remainingDuration = (remainingDist / totalDist) * totalDuration;
+            return {remainingDist, remainingDuration};
+        }
+
+        // Update route and map
+        async function updateRouteAndMap(position) {
+            const now = Date.now();
+            const coords = position.coords;
+            currentPosition = [coords.longitude, coords.latitude];
+
+            // Update user marker
+            if (userMarker) {
+                userMarker.setLatLng([coords.latitude, coords.longitude]);
+            } else {
+                userMarker = L.marker([coords.latitude, coords.longitude], {
+                    icon: L.divIcon({ className: 'user-marker', html: '<div style="background: blue; width: 12px; height: 12px; border-radius: 50%;"></div>' })
+                }).addTo(map).bindPopup('You are here');
+            }
+
+            // Auto-rotate map to heading up if heading available
+            if (coords.heading !== null && typeof coords.heading === 'number') {
+                map.setBearing(coords.heading);
+            }
+
+            // Zoom based on speed
+            const speed = coords.speed ? coords.speed * 3.6 : 0; // Convert m/s to km/h
+            const zoomLevel = speed > 10 ? 14 : 16;
+            map.setView([coords.latitude, coords.longitude], zoomLevel);
+
+            // Hide/show search bar based on speed
+            controlsDiv.classList.toggle('hidden', speed > 5);
+
+            // Update info with speed and estimations
+            let infoText = `Location: ${coords.latitude.toFixed(4)}, ${coords.longitude.toFixed(4)}<br>Speed: ${speed.toFixed(1)} km/h`;
+            if (destinationCoords) {
+                const {remainingDist, remainingDuration} = calculateRemaining();
+                infoText += `<br>Remaining: ${remainingDist.toFixed(2)} km, ${(remainingDuration / 60).toFixed(1)} min`;
+            }
+            infoDiv.innerHTML = infoText;
+
+            // Update route if destination set and conditions met
+            if (destinationCoords && (now - lastRouteUpdate > 60000 || routeData === null)) {
+                try {
+                    routeData = await getCyclingRoute(currentPosition, destinationCoords);
+                    const feature = routeData.features[0];
+                    const summary = feature.properties.summary;
+                    const geometry = feature.geometry;
+
+                    // Remove old route and marker
+                    if (routeLayer) map.removeLayer(routeLayer);
+                    if (destinationMarker) map.removeLayer(destinationMarker);
+
+                    // Add new route
+                    routeLayer = L.geoJSON(geometry, {
+                        style: { color: '#ff6200', weight: 5 }
+                    }).addTo(map).bindPopup(`To ${destinationInput.value}<br>Distance: ${summary.distance} km<br>Duration: ${(summary.duration / 60).toFixed(2)} min`);
+
+                    // Add destination marker
+                    destinationMarker = L.marker([destinationCoords[1], destinationCoords[0]])
+                        .addTo(map)
+                        .bindPopup(destinationInput.value);
+
+                    // Fit map to route bounds
+                    const bounds = L.geoJSON(geometry).getBounds();
+                    map.fitBounds(bounds, { padding: [50, 50] });
+
+                    // Create Turf line
+                    routeLine = turf.lineString(geometry.coordinates);
+
+                    // Display instructions
+                    const steps = feature.properties.segments[0].steps;
+                    displayInstructions(steps);
+
+                    lastRouteUpdate = now;
+                    infoDiv.innerHTML += `<br>Route updated`;
+                } catch (error) {
+                    console.error('Error:', error);
+                    infoDiv.innerHTML += `<br>Error: Failed to update route - ${error.message}`;
+                }
+            }
+        }
+
+        // Handle geolocation errors
+        function handleError(error) {
+            infoDiv.innerHTML = `Error: ${error.message}`;
+            console.error('Geolocation error:', error);
+        }
+
+        // Search and route function
+        async function searchAndRoute() {
+            const placeName = destinationInput.value.trim();
+            if (!placeName) {
+                infoDiv.innerHTML = 'Error: Enter a destination';
+                return;
+            }
+            if (!currentPosition) {
+                infoDiv.innerHTML = 'Error: Waiting for your location...';
+                return;
+            }
+            try {
+                infoDiv.innerHTML = 'Searching for destination...';
+                destinationCoords = await geocodePlace(placeName);
+                infoDiv.innerHTML = `Location: ${currentPosition[1].toFixed(4)}, ${currentPosition[0].toFixed(4)}<br>Fetching route...`;
+                await updateRouteAndMap({ coords: { latitude: currentPosition[1], longitude: currentPosition[0], speed: 0, heading: null } });
+            } catch (error) {
+                console.error('Error:', error);
+                infoDiv.innerHTML = `Error: ${error.message}`;
+            }
+        }
+
+        // Start geolocation tracking
+        if (navigator.geolocation) {
+            navigator.geolocation.watchPosition(updateRouteAndMap, handleError, {
+                enableHighAccuracy: true,
+                timeout: 10000,
+                maximumAge: 0
+            });
+            infoDiv.innerHTML = 'Fetching your location...';
+        } else {
+            infoDiv.innerHTML = 'Geolocation not supported by your browser.';
+        }
+
+        // Allow Enter key to trigger search
+        destinationInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') searchAndRoute();
+        });
+    </script>
+</body>
+</html>

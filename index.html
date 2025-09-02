@@ -1,349 +1,398 @@
+<!doctype html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>On-the-Go Cycling Map with Enhanced UI in Singapore</title>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@100..900&display=swap');
-        body { 
-            margin: 0; 
-            padding: 0; 
-            font-family: "Outfit", sans-serif;
-            font-optical-sizing: auto;
-            color: #333;
-        }
-        #map { 
-            height: 100vh; 
-            width: 100%; 
-        }
-        #controls { 
-            position: absolute; 
-            top: 20px; 
-            left: 50%; 
-            transform: translateX(-50%);
-            background: rgba(255, 255, 255, 0.8);
-            backdrop-filter: blur(8px);
-            padding: 12px 20px; 
-            z-index: 1000; 
-            border-radius: 12px; 
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-            display: flex;
-            align-items: center;
-            transition: opacity 0.3s ease, visibility 0.3s ease;
-        }
-        #controls.hidden {
-            opacity: 0;
-            visibility: hidden;
-        }
-        #info { 
-            position: absolute; 
-            top: 80px; 
-            left: 20px; 
-            background: rgba(255, 255, 255, 0.8);
-            backdrop-filter: blur(8px);
-            padding: 12px 16px; 
-            z-index: 1000; 
-            border-radius: 10px; 
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-            max-width: 300px;
-            font-size: 14px;
-            line-height: 1.5;
-        }
-        #instructions { 
-            position: absolute; 
-            bottom: 20px; 
-            left: 20px; 
-            right: 20px; 
-            background: rgba(255, 255, 255, 0.85);
-            backdrop-filter: blur(8px);
-            padding: 16px; 
-            max-height: 200px; 
-            overflow-y: auto; 
-            z-index: 1000; 
-            border-radius: 10px; 
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-            font-size: 14px;
-        }
-        input { 
-            padding: 10px; 
-            width: 220px; 
-            border: 1px solid #ccc;
-            border-radius: 8px; 
-            font-size: 14px;
-            outline: none;
-            transition: border-color 0.2s ease;
-        }
-        input:focus {
-            border-color: #007bff;
-        }
-        button { 
-            padding: 10px 16px; 
-            background: #007bff; 
-            color: white; 
-            border: none; 
-            border-radius: 8px; 
-            font-size: 14px; 
-            cursor: pointer; 
-            transition: background 0.2s ease;
-        }
-        button:hover {
-            background: #0056b3;
-        }
-        h4 {
-            margin: 0 0 10px 0;
-            font-size: 16px;
-            color: #222;
-        }
-        ol { 
-            margin: 0; 
-            padding-left: 20px; 
-        }
-        li { 
-            margin-bottom: 8px; 
-            color: #444;
-        }
-        /* Custom scrollbar for instructions */
-        #instructions::-webkit-scrollbar {
-            width: 8px;
-        }
-        #instructions::-webkit-scrollbar-track {
-            background: rgba(0, 0, 0, 0.1);
-            border-radius: 10px;
-        }
-        #instructions::-webkit-scrollbar-thumb {
-            background: #007bff;
-            border-radius: 10px;
-        }
-    </style>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+<title>WD_BLACK Bike Computer — Mobile</title>
+
+<!-- Leaflet -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+<!-- Polyline decoder for ORS encoded geometry fallback -->
+<script src="https://unpkg.com/@mapbox/polyline@1.1.1/src/polyline.js"></script>
+<!-- Fonts -->
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;800&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
+
+<style>
+:root{
+  --bg:#0c0c0e; --panel:#121214; --ink:#f4f4f6; --sub:#a7a7ad; --accent:#f2690d; --accent-2:#ff8a3d;
+  --ok:#41d18e; --warn:#f2c037; --bad:#ff5a5f;
+}
+html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);font-family:Montserrat,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial}
+#app{position:fixed;inset:0;display:flex;flex-direction:column;}
+.topbar{display:flex;align-items:center;gap:.5rem;padding:.6rem;background:linear-gradient(180deg,#0b0b0d,#070708);border-bottom:1px solid #171718}
+.brand{font-weight:800;letter-spacing:.12em;font-size:1rem}
+.brand span{color:var(--accent)}
+.controls{display:flex;gap:.5rem;align-items:center;flex:1;overflow:hidden}
+.chip{background:var(--panel);border:1px solid #1e1e22;border-radius:14px;padding:.35rem .6rem;display:flex;gap:.35rem;align-items:center}
+.chip input{background:transparent;border:none;outline:none;color:var(--ink);font-size:.92rem}
+.btn{cursor:pointer;background:linear-gradient(180deg,var(--accent),var(--accent-2));color:black;font-weight:700;border:none;border-radius:14px;padding:.5rem .7rem;font-size:.9rem;box-shadow:0 6px 16px rgba(242,105,13,.22)}
+.btn.flat{background:var(--panel);color:var(--ink);border:1px solid #2a2a30;box-shadow:none}
+.pill{display:flex;align-items:center;gap:.35rem;padding:.38rem .6rem;background:var(--panel);border:1px solid #2a2a30;border-radius:999px;font-size:.85rem}
+.pill .led{width:9px;height:9px;border-radius:50%;background:var(--warn)}.pill.ok .led{background:var(--ok)}
+#map{flex:1;position:relative}
+.stats{display:flex;gap:.5rem;padding:.55rem;background:linear-gradient(0deg,#0b0b0d,rgba(11,11,13,.6));border-top:1px solid #151516;align-items:center;flex-wrap:wrap}
+.card{flex:1;min-width:120px;background:var(--panel);border:1px solid #1f1f25;border-radius:12px;padding:.6rem .8rem;box-shadow: 0 6px 20px rgba(0,0,0,.25) inset}
+.label{font-size:.72rem;letter-spacing:.08em;color:var(--sub)}
+.value{font-family:"IBM Plex Mono",ui-monospace,monospace;font-weight:700;font-size:1.1rem}
+.value .unit{opacity:.75;font-size:.85rem}
+
+/* Floating buttons */
+.fabs{position:absolute;right:12px;bottom:92px;display:flex;flex-direction:column;gap:.45rem;z-index:600}
+.fab{width:48px;height:48px;border-radius:50%;display:grid;place-items:center;background:var(--panel);border:1px solid #262628;cursor:pointer;font-weight:700}
+.search-results{position:absolute;top:56px;left:90px;width:72vw;max-width:360px;background:var(--panel);border:1px solid #232326;border-radius:10px;max-height:40vh;overflow:auto;z-index:700;display:none}
+.search-results.visible{display:block}.search-results div{padding:.6rem;border-bottom:1px solid #1b1b1e;cursor:pointer}.search-results div:hover{background:#131314}
+
+/* mobile-first touch targets */
+@media (max-width:800px){
+  .brand{font-size:.9rem}
+  .btn{padding:.45rem .6rem;font-size:.85rem}
+  .chip input{width:8.5rem}
+  .search-results{left:86px;width:74vw}
+  .card{min-width:110px}
+}
+
+/* small helper styles for rotated map fallback */
+#map.rotate { transform-origin: 50% 50%; transition:transform .12s linear;}
+</style>
 </head>
 <body>
-    <div id="controls">
-        <input type="text" id="destination" placeholder="Enter destination (e.g., Changi Beach Park)">
-        <button onclick="searchAndRoute()">Search & Route</button>
+<div id="app">
+  <div class="topbar">
+    <div class="brand"><span>BIKE</span>PC</div>
+    <div class="controls" style="gap:.6rem">
+      <div class="chip" title="Start (leave empty to use GPS)">
+        <input id="startInput" placeholder="Start (or use GPS)"/>
+        <button class="btn flat" id="useGpsBtn" title="Start GPS">GPS</button>
+      </div>
+
+      <div class="chip" style="position:relative">
+        <input id="destInput" placeholder="Find destination" autocomplete="off"/>
+        <div id="searchResults" class="search-results"></div>
+      </div>
+
+      <button class="btn" id="routeBtn">Start</button>
+
+      <div id="gpsStatus" class="pill" style="margin-left:6px"><span class="led"></span><span id="gpsText">GPS: Idle</span></div>
     </div>
-    <div id="info">Fetching location...</div>
-    <div id="instructions" style="display: none;">
-        <h4>Turn-by-Turn Instructions</h4>
-        <ol id="steps-list"></ol>
-    </div>
-    <div id="map"></div>
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/leaflet-rotate@0.2.7/dist/leaflet-rotate.js"></script>
-    <script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
-    <script>
-        // Initialize map centered on Singapore
-        const map = L.map('map', {
-            zoomControl: true,
-            minZoom: 10,
-            maxZoom: 18,
-            rotate: true,
-            bearing: 0
-        }).setView([1.35, 103.85], 11);
+  </div>
 
-        // Add OpenStreetMap tiles
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-        }).addTo(map);
+  <div id="map"></div>
 
-        // ORS API key (replace with your own)
-        const apiKey = atob("NWIzY2UzNTk3ODUxMTEwMDAxY2Y2MjQ4NzgxMDdiYmE4ZWFiNDc1Njg5OWVhMThlMzY4N2FmNGE="); // Replace with your actual ORS API key
+  <div class="stats">
+    <div class="card"><div class="label">Speed</div><div class="value" id="spd">0.0 <span class="unit">km/h</span></div></div>
+    <div class="card"><div class="label">Distance Left</div><div class="value" id="left">— <span class="unit">km</span></div></div>
+    <div class="card"><div class="label">ETA</div><div class="value" id="eta">—</div><div style="font-size:.75rem;color:var(--sub);margin-top:4px" id="etaClock"></div></div>
+    <div class="card"><div class="label">Total Distance</div><div class="value" id="total">— <span class="unit">km</span></div></div>
+  </div>
+</div>
 
-        // Global variables
-        let currentPosition = null;
-        let routeLayer = null;
-        let userMarker = null;
-        let destinationMarker = null;
-        let lastRouteUpdate = 0;
-        let destinationCoords = null;
-        let routeData = null;
-        let routeLine = null;
+<!-- small modal to paste ORS key (stored in localStorage) -->
+<script>
+(function(){
+  // If user hasn't provided ORS key -> prompt once via simple prompt UI
+  const stored = localStorage.getItem('ORS_API_KEY') || '';
+  if (!stored || stored === 'PASTE_YOUR_ORS_API_KEY_HERE') {
+    // polite prompt — don't block UX, but show once per session
+    setTimeout(()=>{
+      const k = prompt("OpenRouteService API key (paste here). You can get one at https://openrouteservice.org (leave empty to use demo mode, but routing may fail).", "");
+      if (k !== null && k.trim()) localStorage.setItem('ORS_API_KEY', k.trim());
+    }, 700);
+  }
+})();
+</script>
 
-        // DOM elements
-        const destinationInput = document.getElementById('destination');
-        const infoDiv = document.getElementById('info');
-        const instructionsDiv = document.getElementById('instructions');
-        const stepsList = document.getElementById('steps-list');
-        const controlsDiv = document.getElementById('controls');
+<script>
+/* ========== CONFIG ========== */
+const ORS_API_KEY = () => localStorage.getItem('ORS_API_KEY') || atob("NWIzY2UzNTk3ODUxMTEwMDAxY2Y2MjQ4NzgxMDdiYmE4ZWFiNDc1Njg5OWVhMThlMzY4N2FmNGE=");
+const ORS_PROFILE = 'cycling-regular'; // change if you prefer
+/* ========== HELPERS ========== */
+const km = m => m/1000;
+const fmtKm = m => (km(m)).toFixed(2);
+const fmtTime = secs => {
+  if (!isFinite(secs) || secs<=0) return '—';
+  const h = Math.floor(secs/3600); const m = Math.floor((secs%3600)/60);
+  return (h>0? h+'h ':'') + m + 'm';
+};
+const fmtClock = (secsFromNow) => {
+  if (!isFinite(secsFromNow) || secsFromNow<=0) return '—';
+  const t = new Date(Date.now()+secsFromNow*1000);
+  return t.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+};
+function haversine(a,b){
+  const R=6371000, toRad=d=>d*Math.PI/180;
+  const dLat=toRad(b[0]-a[0]), dLng=toRad(b[1]-a[1]);
+  const s1=Math.sin(dLat/2), s2=Math.sin(dLng/2);
+  const A = s1*s1 + Math.cos(toRad(a[0]))*Math.cos(toRad(b[0]))*s2*s2;
+  return 2*R*Math.atan2(Math.sqrt(A), Math.sqrt(1-A));
+}
+function decodeGeometry(geom){
+  if (!geom) return [];
+  if (typeof geom === 'string'){
+    try{ return polyline.decode(geom).map(([lat,lng])=>[lat,lng]); }catch(e){ return []; }
+  }
+  if (geom.type === 'LineString' && Array.isArray(geom.coordinates)){
+    return geom.coordinates.map(([lng,lat])=>[lat,lng]);
+  }
+  return [];
+}
 
-        // Geocoding function
-        async function geocodePlace(placeName) {
-            const url = `https://api.openrouteservice.org/geocode/search?api_key=${apiKey}&text=${encodeURIComponent(placeName)}&boundary.country=SGP`;
-            const response = await fetch(url);
-            if (!response.ok) throw new Error(`Geocoding error: ${response.status} - ${response.statusText}`);
-            const data = await response.json();
-            if (!data.features.length) throw new Error(`No results for "${placeName}"`);
-            return data.features[0].geometry.coordinates; // [lon, lat]
-        }
+/* ========== MAP SETUP ========== */
+const map = L.map('map',{zoomControl:false,worldCopyJump:true}).setView([1.29027,103.851959],13);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{maxZoom:20,attribution:'&copy; OpenStreetMap & CARTO'}).addTo(map);
+// layers
+const routeLayer = L.polyline([], {color:'#ff8a3d',weight:6,opacity:0.95}).addTo(map);
+const progLayer  = L.polyline([], {color:'#fefefe',weight:6,opacity:0.95,dashArray:'6 10'}).addTo(map);
+const startMarker = L.circleMarker([0,0], {radius:6, color:'#f2690d', fill:true, fillOpacity:1}).addTo(map);
+const destMarker  = L.circleMarker([0,0], {radius:6, color:'#ff8a3d', fill:true, fillOpacity: .55});
+const currentMarker = L.marker([0,0], {icon: L.divIcon({className:'currDot', html:'<div style="width:14px;height:14px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 2px #0c0c0e,0 0 14px rgba(65,209,142,.8)"></div>'})}).addTo(map);
 
-        // Routing function
-        async function getCyclingRoute(startCoords, endCoords) {
-            const url = 'https://api.openrouteservice.org/v2/directions/cycling-regular';
-            const response = await fetch(url, {
-                method: 'POST',
-                headers: {
-                    'Authorization': apiKey,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    coordinates: [startCoords, endCoords],
-                    units: 'km',
-                    geometry_format: 'geojson',
-                    preference: 'recommended',
-                    extra_info: ['surface']
-                })
-            });
-            if (!response.ok) throw new Error(`Routing error: ${response.status} - ${response.statusText}`);
-            return await response.json();
-        }
+/* ========== STATE ========== */
+let origin = null, destination = null;
+let routeCoords = [], totalDistanceM = 0, routeDurationS = 0;
+let lastPos = null, lastTime = null, manualSpeedMS = 0, watchId = null;
+let lastReroute = 0;
+let following = true;
+let lockNorth = false;
 
-        // Display turn-by-turn instructions
-        function displayInstructions(steps) {
-            stepsList.innerHTML = '';
-            steps.forEach(step => {
-                const li = document.createElement('li');
-                li.textContent = `${step.instruction} (${step.distance.toFixed(2)} km, ${(step.duration / 60).toFixed(1)} min)`;
-                stepsList.appendChild(li);
-            });
-            instructionsDiv.style.display = 'block';
-        }
+/* ========== UI REFS ========== */
+const spdEl = document.getElementById('spd'), leftEl = document.getElementById('left'), etaEl = document.getElementById('eta'),
+      totalEl = document.getElementById('total'), etaClock = document.getElementById('etaClock'), gpsStatus = document.getElementById('gpsStatus'),
+      gpsText = document.getElementById('gpsText');
 
-        // Calculate remaining distance and ETA
-        function calculateRemaining() {
-            if (!routeLine || !currentPosition || !routeData) return {remainingDist: 0, remainingDuration: 0};
-            const point = turf.point(currentPosition);
-            const nearest = turf.nearestPointOnLine(routeLine, point);
-            const endPoint = turf.point(destinationCoords);
-            const slice = turf.lineSlice(nearest, endPoint, routeLine);
-            const remainingDist = turf.length(slice, {units: 'kilometers'});
-            const totalDist = routeData.features[0].properties.summary.distance;
-            const totalDuration = routeData.features[0].properties.summary.duration;
-            const remainingDuration = (remainingDist / totalDist) * totalDuration;
-            return {remainingDist, remainingDuration};
-        }
+function setGpsStatus(ok, text){
+  gpsStatus.classList.toggle('ok', !!ok); gpsText.textContent = text || (ok? 'GPS: Ready' : 'GPS: Idle');
+}
 
-        // Update route and map
-        async function updateRouteAndMap(position) {
-            const now = Date.now();
-            const coords = position.coords;
-            currentPosition = [coords.longitude, coords.latitude];
+/* ========== SEARCH (Nominatim) ========== */
+const destInput = document.getElementById('destInput'), resultsBox = document.getElementById('searchResults');
+let searchTimer = null;
+async function searchPlaces(q){
+  const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&addressdetails=1&limit=8`;
+  try{
+    const res = await fetch(url, {headers:{'Accept-Language':navigator.language||'en'}});
+    if (!res.ok) return [];
+    return await res.json();
+  }catch(e){ return []; }
+}
+destInput.addEventListener('input', ()=>{
+  clearTimeout(searchTimer);
+  const q = destInput.value.trim();
+  if (!q){ resultsBox.classList.remove('visible'); resultsBox.innerHTML=''; return; }
+  searchTimer = setTimeout(async ()=>{
+    const list = await searchPlaces(q);
+    resultsBox.innerHTML = list.map(item => `<div data-lat="${item.lat}" data-lon="${item.lon}"><strong>${item.display_name.split(',')[0]}</strong><br><span style="color:var(--sub);font-size:.8rem">${item.display_name}</span></div>`).join('');
+    resultsBox.classList.add('visible');
+  }, 300);
+});
+resultsBox.addEventListener('click', (ev)=>{
+  const el = ev.target.closest('div'); if(!el) return;
+  const lat = parseFloat(el.getAttribute('data-lat')), lon = parseFloat(el.getAttribute('data-lon'));
+  destination = {lat:lat, lng:lon};
+  destMarker.setLatLng([lat,lon]).addTo(map);
+  map.flyTo([lat,lon],15,{duration:.5});
+  destInput.value = el.textContent.split('\n')[0];
+  resultsBox.classList.remove('visible');
+});
 
-            // Update user marker
-            if (userMarker) {
-                userMarker.setLatLng([coords.latitude, coords.longitude]);
-            } else {
-                userMarker = L.marker([coords.latitude, coords.longitude], {
-                    icon: L.divIcon({ className: 'user-marker', html: '<div style="background: blue; width: 12px; height: 12px; border-radius: 50%;"></div>' })
-                }).addTo(map).bindPopup('You are here');
-            }
+/* ========== GEOLOCATION ========== */
+function startGPS(){
+  if (!('geolocation' in navigator)) { setGpsStatus(false,'GPS: Unsupported'); return; }
+  if (watchId !== null) return; // already watching
+  watchId = navigator.geolocation.watchPosition(onPos, onPosErr, {enableHighAccuracy:true, maximumAge:1000, timeout:10000});
+  setGpsStatus(true,'GPS: Pending');
+}
+function stopGPS(){
+  if (watchId!==null){ navigator.geolocation.clearWatch(watchId); watchId=null; setGpsStatus(false,'GPS: Stopped'); }
+}
+function onPosErr(err){ setGpsStatus(false, 'GPS: '+ (err && err.message ? err.message : 'error')); }
+function onPos(pos){
+  const {latitude, longitude, speed, heading} = pos.coords;
+  navigator.geolocation.lastSpeedMS = (typeof speed==='number' && speed>=0) ? speed : navigator.geolocation.lastSpeedMS || 0;
+  const now = pos.timestamp || Date.now();
+  const cur = [latitude, longitude];
+  currentMarker.setLatLng(cur);
+  if (!origin){ origin = {lat:latitude, lng:longitude}; startMarker.setLatLng([latitude, longitude]).addTo(map); map.setView(cur,15); }
+  if (lastPos){
+    const dt = (now - lastTime)/1000; if (dt>0) manualSpeedMS = Math.min(25, haversine(lastPos, cur)/dt);
+  }
+  lastPos = cur; lastTime = now;
+  setGpsStatus(true,'GPS: Tracking');
+  if (following) map.panTo(cur,{animate:true, duration:.14});
+  updateStats(cur);
+  // Smart reroute: every 20s OR if user deviates noticeably (we'll check perpendicular distance to route)
+  if (destination){
+    const t = Date.now();
+    const distFromRoute = calcDistFromRoute(cur);
+    if (t - lastReroute > 20000 || distFromRoute > 60){ lastReroute = t; routeFromTo({lat:latitude,lng:longitude}, destination, true); }
+  }
+}
 
-            // Auto-rotate map to heading up if heading available
-            if (coords.heading !== null && typeof coords.heading === 'number') {
-                map.setBearing(coords.heading);
-            }
+/* distance from nearest route vertex (rough) */
+function nearestRouteIndex(point, coords){
+  if (!coords || coords.length===0) return 0;
+  let best=0, bestD=Infinity;
+  for (let i=0;i<coords.length;i++){
+    const d = haversine(point, coords[i]);
+    if (d < bestD){ bestD = d; best = i; }
+  }
+  return {index:best, dist:bestD};
+}
+function calcDistFromRoute(pt){
+  if (!routeCoords.length) return Infinity;
+  return nearestRouteIndex(pt, routeCoords).dist;
+}
+function remainingDistanceFrom(point){
+  if (!routeCoords.length) return 0;
+  const idx = nearestRouteIndex(point, routeCoords).index;
+  let sum = 0;
+  for (let i=idx;i<routeCoords.length-1;i++) sum += haversine(routeCoords[i], routeCoords[i+1]);
+  return sum;
+}
+function updateStats(cur){
+  const distLeft = remainingDistanceFrom(cur || lastPos);
+  leftEl.textContent = fmtKm(distLeft) + ' km';
+  totalEl.textContent = (totalDistanceM? fmtKm(totalDistanceM) + ' km' : '—');
+  const deviceSpeed = (navigator.geolocation && navigator.geolocation.lastSpeedMS) || 0;
+  const spdMS = deviceSpeed > 0 ? deviceSpeed : manualSpeedMS;
+  const spdKmh = spdMS * 3.6;
+  spdEl.innerHTML = spdKmh.toFixed(1) + ' <span class="unit">km/h</span>';
+  // ETA: prefer real-time computed ETA if moving (speed>0.5 m/s)
+  const estSecs = (spdMS > 0.5) ? (distLeft / spdMS) : routeDurationS;
+  etaEl.textContent = fmtTime(estSecs);
+  etaClock.textContent = (estSecs>0 && estSecs<1e7) ? fmtClock(estSecs) : '';
+}
 
-            // Zoom based on speed
-            const speed = coords.speed ? coords.speed * 3.6 : 0; // Convert m/s to km/h
-            const zoomLevel = speed > 10 ? 14 : 16;
-            map.setView([coords.latitude, coords.longitude], zoomLevel);
+/* ========== ROUTING (OpenRouteService) ========== */
+async function routeFromTo(from, to, silent=false){
+  const key = ORS_API_KEY();
+  if (!key || key==='5b3ce3597851110001cf624878107bba8eab4756899ea18e3687af4a'){ if(!silent) alert('Set OpenRouteService API key in localStorage (prompt appears on load).'); return; }
+  const body = {
+    coordinates: [[from.lng, from.lat], [to.lng, to.lat]],
+    instructions: true,
+    elevation: false,
+    preference: 'recommended'
+  };
+  try{
+    const res = await fetch(`https://api.openrouteservice.org/v2/directions/${ORS_PROFILE}`, {
+      method:'POST',
+      headers: {'Content-Type':'application/json','Authorization': key},
+      body: JSON.stringify(body)
+    });
+    if (!res.ok){ const txt = await res.text(); if(!silent) alert('Routing error: ' + txt); return; }
+    const data = await res.json();
+    const route = data && data.routes && data.routes[0];
+    if (!route){ if(!silent) alert('No route'); return; }
+    // decode geometry robustly
+    routeCoords = decodeGeometry(route.geometry);
+    // fallback if geometry absent: try segments steps (not ideal)
+    if (!routeCoords.length && route.segments && route.segments[0] && route.segments[0].steps){
+      routeCoords = route.segments[0].steps.flatMap(s => s.geometry ? decodeGeometry(s.geometry) : []).filter(Boolean);
+    }
+    routeLayer.setLatLngs(routeCoords);
+    startMarker.setLatLng([from.lat, from.lng]).addTo(map);
+    destMarker.setLatLng([to.lat, to.lng]).addTo(map);
+    if (route.bbox){
+      map.fitBounds([[route.bbox[1],route.bbox[0]],[route.bbox[3],route.bbox[2]]], {padding:[30,40]});
+    } else if (routeCoords.length) {
+      map.fitBounds(routeLayer.getBounds(), {padding:[30,40]});
+    }
+    // summary
+    totalDistanceM = (route.summary && route.summary.distance) || route.distance || 0;
+    routeDurationS  = (route.summary && route.summary.duration) || route.duration || 0;
+    // reset progress
+    progLayer.setLatLngs([]);
+    // initial stats update
+    updateStats(lastPos || [from.lat, from.lng]);
+  }catch(err){
+    if(!silent) alert('Routing error: '+err.message);
+  }
+}
 
-            // Hide/show search bar based on speed
-            controlsDiv.classList.toggle('hidden', speed > 5);
+/* ========== UI WIRING ========== */
+document.getElementById('useGpsBtn').addEventListener('click', ()=>{
+  origin = null; startGPS();
+});
+document.getElementById('routeBtn').addEventListener('click', async ()=>{
+  if (!destination){ alert('Pick a destination first.'); return; }
+  const useGpsStart = !document.getElementById('startInput').value.trim();
+  if (useGpsStart && !lastPos){ alert('Waiting for GPS fix — allow location then press GPS button.'); return; }
+  let from = null;
+  if (useGpsStart){
+    from = {lat: lastPos[0], lng: lastPos[1]};
+  } else {
+    // geocode start
+    const q = document.getElementById('startInput').value.trim();
+    if (!q){ alert('Enter a start or use GPS'); return; }
+    const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=1`);
+    const j = await res.json();
+    if (!j || !j[0]){ alert('Could not resolve start'); return; }
+    from = {lat: parseFloat(j[0].lat), lng: parseFloat(j[0].lon)};
+  }
+  origin = from;
+  routeFromTo(from, destination);
+});
 
-            // Update info with speed and estimations
-            let infoText = `Location: ${coords.latitude.toFixed(4)}, ${coords.longitude.toFixed(4)}<br>Speed: ${speed.toFixed(1)} km/h`;
-            if (destinationCoords) {
-                const {remainingDist, remainingDuration} = calculateRemaining();
-                infoText += `<br>Remaining: ${remainingDist.toFixed(2)} km, ${(remainingDuration / 60).toFixed(1)} min`;
-            }
-            infoDiv.innerHTML = infoText;
+/* ========== PROGRESS UI: dashed line from start to current position ========== */
+setInterval(()=>{
+  if (!routeCoords.length || !lastPos) return;
+  const idx = nearestRouteIndex(lastPos, routeCoords).index;
+  progLayer.setLatLngs(routeCoords.slice(0, idx));
+}, 900);
 
-            // Update route if destination set and conditions met
-            if (destinationCoords && (now - lastRouteUpdate > 60000 || routeData === null)) {
-                try {
-                    routeData = await getCyclingRoute(currentPosition, destinationCoords);
-                    const feature = routeData.features[0];
-                    const summary = feature.properties.summary;
-                    const geometry = feature.geometry;
+/* ========== DEVICE ORIENTATION: rotate map or skip gracefully ========== */
+let lastBearing = 0;
+function setBearing(deg){
+  if (lockNorth) return;
+  lastBearing = deg;
+  // prefer map.setBearing if plugin available; fallback rotate container
+  const mapEl = document.getElementById('map');
+  mapEl.classList.add('rotate');
+  mapEl.style.transform = `rotate(${deg}deg)`;
+}
+// request permission for iOS 13+ & modern Safari
+async function requestOrientationPermission(){
+  if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function'){
+    try{
+      const resp = await DeviceOrientationEvent.requestPermission();
+      if (resp === 'granted') window.addEventListener('deviceorientationabsolute', (e)=>{ if (e.alpha!=null) setBearing(360-e.alpha); });
+    }catch(e){}
+  } else {
+    window.addEventListener('deviceorientationabsolute', (e)=>{ if (e.alpha!=null) setBearing(360-e.alpha); });
+    // fallback
+    window.addEventListener('deviceorientation', (e)=>{ const heading = e.webkitCompassHeading || (typeof e.alpha==='number' ? (360 - e.alpha) : null); if (heading!=null) setBearing(heading); });
+  }
+}
+requestOrientationPermission();
 
-                    // Remove old route and marker
-                    if (routeLayer) map.removeLayer(routeLayer);
-                    if (destinationMarker) map.removeLayer(destinationMarker);
+/* ========== small UX touches ========== */
+// hide search results when clicking outside
+document.addEventListener('click', (e)=>{ if(!e.target.closest('.chip')) resultsBox.classList.remove('visible'); });
 
-                    // Add new route
-                    routeLayer = L.geoJSON(geometry, {
-                        style: { color: '#ff6200', weight: 5 }
-                    }).addTo(map).bindPopup(`To ${destinationInput.value}<br>Distance: ${summary.distance} km<br>Duration: ${(summary.duration / 60).toFixed(2)} min`);
+// follow toggles
+map.on('dragstart', ()=>{ following=false; });
+map.on('zoomstart', ()=>{ following=false; });
+map.on('dblclick', ()=>{ following=true; });
 
-                    // Add destination marker
-                    destinationMarker = L.marker([destinationCoords[1], destinationCoords[0]])
-                        .addTo(map)
-                        .bindPopup(destinationInput.value);
+// compute eta every second if moving
+setInterval(()=>{
+  updateStats(lastPos || origin);
+}, 1000);
 
-                    // Fit map to route bounds
-                    const bounds = L.geoJSON(geometry).getBounds();
-                    map.fitBounds(bounds, { padding: [50, 50] });
+/* ========== small keyboard fallback: Enter on dest triggers selection if only one result ========== */
+destInput.addEventListener('keydown', async (e)=>{
+  if (e.key === 'Enter'){
+    if (resultsBox.children.length === 1){
+      resultsBox.children[0].click();
+    } else {
+      // no single result, let user refine
+    }
+  }
+});
 
-                    // Create Turf line
-                    routeLine = turf.lineString(geometry.coordinates);
+/* ========== finish ========== */
+startGPS();
 
-                    // Display instructions
-                    const steps = feature.properties.segments[0].steps;
-                    displayInstructions(steps);
-
-                    lastRouteUpdate = now;
-                    infoDiv.innerHTML += `<br>Route updated`;
-                } catch (error) {
-                    console.error('Error:', error);
-                    infoDiv.innerHTML += `<br>Error: Failed to update route - ${error.message}`;
-                }
-            }
-        }
-
-        // Handle geolocation errors
-        function handleError(error) {
-            infoDiv.innerHTML = `Error: ${error.message}`;
-            console.error('Geolocation error:', error);
-        }
-
-        // Search and route function
-        async function searchAndRoute() {
-            const placeName = destinationInput.value.trim();
-            if (!placeName) {
-                infoDiv.innerHTML = 'Error: Enter a destination';
-                return;
-            }
-            if (!currentPosition) {
-                infoDiv.innerHTML = 'Error: Waiting for your location...';
-                return;
-            }
-            try {
-                infoDiv.innerHTML = 'Searching for destination...';
-                destinationCoords = await geocodePlace(placeName);
-                infoDiv.innerHTML = `Location: ${currentPosition[1].toFixed(4)}, ${currentPosition[0].toFixed(4)}<br>Fetching route...`;
-                await updateRouteAndMap({ coords: { latitude: currentPosition[1], longitude: currentPosition[0], speed: 0, heading: null } });
-            } catch (error) {
-                console.error('Error:', error);
-                infoDiv.innerHTML = `Error: ${error.message}`;
-            }
-        }
-
-        // Start geolocation tracking
-        if (navigator.geolocation) {
-            navigator.geolocation.watchPosition(updateRouteAndMap, handleError, {
-                enableHighAccuracy: true,
-                timeout: 10000,
-                maximumAge: 0
-            });
-            infoDiv.innerHTML = 'Fetching your location...';
-        } else {
-            infoDiv.innerHTML = 'Geolocation not supported by your browser.';
-        }
-
-        // Allow Enter key to trigger search
-        destinationInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') searchAndRoute();
-        });
-    </script>
+</script>
 </body>
 </html>

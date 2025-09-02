@@ -20,16 +20,17 @@
 html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);font-family:Montserrat,system-ui}
 #app{position:fixed;inset:0;display:flex;flex-direction:column;}
 
-#destOverlay{
+/* Overlay */
+#overlay{
   position:fixed;inset:0;background:var(--bg);z-index:1000;
   display:flex;align-items:center;justify-content:center;flex-direction:column;
 }
-#destOverlay h2{margin-bottom:1rem}
-#destOverlay input{padding:.6rem;border-radius:8px;border:1px solid #333;width:80%;max-width:360px;font-size:1rem}
+#overlay h2{margin-bottom:1rem}
+#overlay input{padding:.6rem;border-radius:8px;border:1px solid #333;width:80%;max-width:360px;font-size:1rem;margin-bottom:.5rem}
+#overlay button{padding:.6rem 1rem;border:none;border-radius:8px;background:var(--accent);color:#000;font-weight:700;cursor:pointer;margin-top:.5rem}
 #destResults{width:80%;max-width:360px;background:var(--panel);margin-top:.5rem;border-radius:6px;max-height:40vh;overflow:auto;display:none}
 #destResults div{padding:.5rem;border-bottom:1px solid #222;cursor:pointer}
 #destResults div:hover{background:#191919}
-#confirmDest{margin-top:1rem;padding:.6rem 1rem;border:none;border-radius:8px;background:var(--accent);color:#000;font-weight:700;cursor:pointer}
 
 .topbar{display:flex;align-items:center;padding:.5rem;background:#111}
 .brand{font-weight:800;font-size:1rem}
@@ -44,9 +45,10 @@ html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);font-family
 </head>
 <body>
 
-<!-- Destination Overlay -->
-<div id="destOverlay">
-  <h2>Select Destination</h2>
+<!-- Overlay: API key + destination -->
+<div id="overlay">
+  <h2>Start Ride</h2>
+  <input id="apiKey" placeholder="Enter OpenRouteService API Key"/>
   <input id="destSearch" placeholder="Search destination"/>
   <div id="destResults"></div>
   <button id="confirmDest" disabled>Confirm</button>
@@ -65,42 +67,29 @@ html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);font-family
 </div>
 
 <script>
-/* ========== HELPERS ========== */
+/* Helpers */
 const km = m=>m/1000;
 const fmtKm = m=>km(m).toFixed(2);
 const fmtTime = s=>!s?'—':Math.floor(s/60)+"m";
 const fmtClock = s=>{const t=new Date(Date.now()+s*1000);return t.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});};
-function haversine(a,b){
-  const R=6371000,toRad=d=>d*Math.PI/180;
-  const dLat=toRad(b[0]-a[0]),dLng=toRad(b[1]-a[1]);
-  const A=Math.sin(dLat/2)**2+Math.cos(toRad(a[0]))*Math.cos(toRad(b[0]))*Math.sin(dLng/2)**2;
-  return 2*R*Math.atan2(Math.sqrt(A),Math.sqrt(1-A));
-}
-function decodeGeometry(geom){
-  try{ return polyline.decode(geom).map(([lat,lng])=>[lat,lng]); }catch(e){ return []; }
-}
+function haversine(a,b){const R=6371000,toRad=d=>d*Math.PI/180;const dLat=toRad(b[0]-a[0]),dLng=toRad(b[1]-a[1]);const A=Math.sin(dLat/2)**2+Math.cos(toRad(a[0]))*Math.cos(toRad(b[0]))*Math.sin(dLng/2)**2;return 2*R*Math.atan2(Math.sqrt(A),Math.sqrt(1-A));}
+function decodeGeometry(geom){try{ return polyline.decode(geom).map(([lat,lng])=>[lat,lng]); }catch(e){ return []; }}
 
-/* ========== MAP ========== */
+/* Map */
 const map = L.map('map').setView([1.29,103.85],13);
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+ {attribution:'© OSM & CARTO',subdomains:'abcd',maxZoom:20}).addTo(map);
 
 const routeLayer = L.polyline([], {color:'#ff8a3d',weight:5}).addTo(map);
+const currentMarker = L.circleMarker([0,0], {radius:6,color:'#41d18e',fillOpacity:1}).addTo(map);
 
-// bike arrow
-const arrowIcon = L.divIcon({className:'',html:'<div id="bikeArrow" style="font-size:20px;transform:rotate(0deg)">⬆️</div>'});
-const currentMarker = L.marker([0,0], {icon:arrowIcon}).addTo(map);
-function updateHeading(deg){
-  const el=document.getElementById("bikeArrow");
-  if(el) el.style.transform=`rotate(${deg}deg)`;
-}
-
-/* ========== STATE ========== */
-let destination=null, routeCoords=[], totalDistanceM=0, routeDurationS=0;
+/* State */
+let apiKey="", destination=null, routeCoords=[], totalDistanceM=0, routeDurationS=0;
 let lastPos=null,lastTime=null,speedMS=0;
 
-/* ========== SEARCH ========== */
+/* Overlay search */
 const searchBox=document.getElementById('destSearch'),resultsBox=document.getElementById('destResults'),confirmBtn=document.getElementById('confirmDest');
-let searchTimer=null,selected=null;
+let selected=null,searchTimer=null;
 searchBox.addEventListener('input',()=>{
   clearTimeout(searchTimer);
   const q=searchBox.value.trim();
@@ -119,15 +108,17 @@ resultsBox.addEventListener('click',e=>{
   resultsBox.style.display="none";
   confirmBtn.disabled=false;
 });
-confirmBtn.addEventListener('click',()=>{
-  if(!selected)return;
+document.getElementById('confirmDest').addEventListener('click',()=>{
+  apiKey=document.getElementById('apiKey').value.trim();
+  if(!apiKey){alert("Please enter ORS API key");return;}
+  if(!selected){alert("Pick a destination");return;}
   destination=selected;
-  document.getElementById('destOverlay').style.display="none";
+  document.getElementById('overlay').style.display="none";
   document.getElementById('app').style.display="flex";
   startGPS();
 });
 
-/* ========== GPS + ROUTE ========== */
+/* GPS */
 function startGPS(){
   if(!navigator.geolocation)return;
   navigator.geolocation.watchPosition(onPos,console.error,{enableHighAccuracy:true});
@@ -147,12 +138,12 @@ async function onPos(pos){
   }
   updateStats(cur,speed||speedMS);
 }
+
+/* Routing */
 async function routeFromTo(from,to){
-  const key=localStorage.getItem('ORS_API_KEY')||'';
-  if(!key){alert("Set ORS key in localStorage");return;}
   const body={coordinates:[[from.lng,from.lat],[to.lng,to.lat]]};
   const res=await fetch(`https://api.openrouteservice.org/v2/directions/cycling-regular`,{
-    method:'POST',headers:{'Authorization':key,'Content-Type':'application/json'},body:JSON.stringify(body)});
+    method:'POST',headers:{'Authorization':apiKey,'Content-Type':'application/json'},body:JSON.stringify(body)});
   const data=await res.json();
   const route=data.routes[0];
   routeCoords=decodeGeometry(route.geometry);
@@ -168,17 +159,6 @@ function updateStats(cur,spd){
   document.getElementById('total').textContent=fmtKm(totalDistanceM)+" km";
   const eta=spd>0?distLeft/spd:routeDurationS;
   document.getElementById('eta').textContent=fmtTime(eta)+" ("+fmtClock(eta)+")";
-}
-
-/* ========== ORIENTATION ========== */
-if(window.DeviceOrientationEvent){
-  window.addEventListener("deviceorientationabsolute",e=>{
-    if(e.alpha!=null) updateHeading(360-e.alpha);
-  });
-  window.addEventListener("deviceorientation",e=>{
-    const h=e.webkitCompassHeading||(e.alpha?360-e.alpha:null);
-    if(h!=null) updateHeading(h);
-  });
 }
 </script>
 </body>

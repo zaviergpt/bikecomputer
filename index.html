@@ -86,10 +86,14 @@ const currentMarker = L.circleMarker([0,0], {radius:6,color:'#41d18e',fillOpacit
 /* State */
 let apiKey="", destination=null, routeCoords=[], totalDistanceM=0, routeDurationS=0;
 let lastPos=null,lastTime=null,speedMS=0;
+let following=true; // auto-follow mode
 
 /* Overlay search */
-const searchBox=document.getElementById('destSearch'),resultsBox=document.getElementById('destResults'),confirmBtn=document.getElementById('confirmDest');
+const searchBox=document.getElementById('destSearch'),
+      resultsBox=document.getElementById('destResults'),
+      confirmBtn=document.getElementById('confirmDest');
 let selected=null,searchTimer=null;
+
 searchBox.addEventListener('input',()=>{
   clearTimeout(searchTimer);
   const q=searchBox.value.trim();
@@ -127,16 +131,23 @@ async function onPos(pos){
   const {latitude,longitude,speed}=pos.coords;
   const cur=[latitude,longitude];
   currentMarker.setLatLng(cur);
-  map.setView(cur,15);
+
   if(lastPos){
     const dt=(pos.timestamp-lastTime)/1000;
     if(dt>0) speedMS=haversine(lastPos,cur)/dt;
   }
   lastPos=cur; lastTime=pos.timestamp;
+
   if(destination && !routeCoords.length){
     await routeFromTo({lat:latitude,lng:longitude},destination);
   }
+
   updateStats(cur,speed||speedMS);
+
+  // Smooth auto-follow (slow pan, not instant jump)
+  if(following){
+    map.panTo(cur,{animate:true,duration:1.2});
+  }
 }
 
 /* Routing */
@@ -150,6 +161,8 @@ async function routeFromTo(from,to){
   routeLayer.setLatLngs(routeCoords);
   totalDistanceM=route.summary.distance;
   routeDurationS=route.summary.duration;
+  // Fit to full route initially
+  map.fitBounds(routeLayer.getBounds(), {padding:[40,40]});
 }
 function updateStats(cur,spd){
   document.getElementById('spd').innerHTML=(spd*3.6).toFixed(1)+" <span class='unit'>km/h</span>";
@@ -162,4 +175,4 @@ function updateStats(cur,spd){
 }
 </script>
 </body>
-</html>
+                                                              </html>

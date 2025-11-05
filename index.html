@@ -1,178 +1,198 @@
-<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
-<title>WD_BLACK Bike Computer</title>
-
-<!-- Leaflet -->
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="https://unpkg.com/@mapbox/polyline@1.1.1/src/polyline.js"></script>
-
-<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;800&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
-
-<style>
-:root{
-  --bg:#0c0c0e; --panel:#121214; --ink:#f4f4f6; --sub:#a7a7ad;
-  --accent:#f2690d; --accent-2:#ff8a3d; --ok:#41d18e;
-}
-html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);font-family:Montserrat,system-ui}
-#app{position:fixed;inset:0;display:flex;flex-direction:column;}
-
-/* Overlay */
-#overlay{
-  position:fixed;inset:0;background:var(--bg);z-index:1000;
-  display:flex;align-items:center;justify-content:center;flex-direction:column;
-}
-#overlay h2{margin-bottom:1rem}
-#overlay input{padding:.6rem;border-radius:8px;border:1px solid #333;width:80%;max-width:360px;font-size:1rem;margin-bottom:.5rem}
-#overlay button{padding:.6rem 1rem;border:none;border-radius:8px;background:var(--accent);color:#000;font-weight:700;cursor:pointer;margin-top:.5rem}
-#destResults{width:80%;max-width:360px;background:var(--panel);margin-top:.5rem;border-radius:6px;max-height:40vh;overflow:auto;display:none}
-#destResults div{padding:.5rem;border-bottom:1px solid #222;cursor:pointer}
-#destResults div:hover{background:#191919}
-
-.topbar{display:flex;align-items:center;padding:.5rem;background:#111}
-.brand{font-weight:800;font-size:1rem}
-.brand span{color:var(--accent)}
-#map{flex:1}
-.stats{display:flex;gap:.5rem;padding:.5rem;background:#111;flex-wrap:wrap}
-.card{flex:1;min-width:120px;background:var(--panel);border-radius:10px;padding:.5rem .7rem}
-.label{font-size:.7rem;color:var(--sub)}
-.value{font-family:"IBM Plex Mono",monospace;font-weight:700;font-size:1.1rem}
-.value .unit{font-size:.8rem;opacity:.7}
-</style>
-</head>
-<body>
-
-<!-- Overlay: API key + destination -->
-<div id="overlay">
-  <h2>Start Ride</h2>
-  <input id="apiKey" placeholder="Enter OpenRouteService API Key"/>
-  <input id="destSearch" placeholder="Search destination"/>
-  <div id="destResults"></div>
-  <button id="confirmDest" disabled>Confirm</button>
-</div>
-
-<!-- Main App -->
-<div id="app" style="display:none;">
-  <div class="topbar"><div class="brand">WD_<span>BLACK</span> BIKE</div></div>
-  <div id="map"></div>
-  <div class="stats">
-    <div class="card"><div class="label">Speed</div><div class="value" id="spd">0.0 <span class="unit">km/h</span></div></div>
-    <div class="card"><div class="label">Distance Left</div><div class="value" id="left">— km</div></div>
-    <div class="card"><div class="label">ETA</div><div class="value" id="eta">—</div></div>
-    <div class="card"><div class="label">Total Distance</div><div class="value" id="total">— km</div></div>
-  </div>
-</div>
-
-<script>
-/* Helpers */
-const km = m=>m/1000;
-const fmtKm = m=>km(m).toFixed(2);
-const fmtTime = s=>!s?'—':Math.floor(s/60)+"m";
-const fmtClock = s=>{const t=new Date(Date.now()+s*1000);return t.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});};
-function haversine(a,b){const R=6371000,toRad=d=>d*Math.PI/180;const dLat=toRad(b[0]-a[0]),dLng=toRad(b[1]-a[1]);const A=Math.sin(dLat/2)**2+Math.cos(toRad(a[0]))*Math.cos(toRad(b[0]))*Math.sin(dLng/2)**2;return 2*R*Math.atan2(Math.sqrt(A),Math.sqrt(1-A));}
-function decodeGeometry(geom){try{ return polyline.decode(geom).map(([lat,lng])=>[lat,lng]); }catch(e){ return []; }}
-
-/* Map */
-const map = L.map('map').setView([1.29,103.85],13);
-L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
- {attribution:'© OSM & CARTO',subdomains:'abcd',maxZoom:20}).addTo(map);
-
-const routeLayer = L.polyline([], {color:'#ff8a3d',weight:5}).addTo(map);
-const currentMarker = L.circleMarker([0,0], {radius:6,color:'#41d18e',fillOpacity:1}).addTo(map);
-
-/* State */
-let apiKey="", destination=null, routeCoords=[], totalDistanceM=0, routeDurationS=0;
-let lastPos=null,lastTime=null,speedMS=0;
-let following=true; // auto-follow mode
-
-/* Overlay search */
-const searchBox=document.getElementById('destSearch'),
-      resultsBox=document.getElementById('destResults'),
-      confirmBtn=document.getElementById('confirmDest');
-let selected=null,searchTimer=null;
-
-searchBox.addEventListener('input',()=>{
-  clearTimeout(searchTimer);
-  const q=searchBox.value.trim();
-  if(!q){resultsBox.style.display="none";return;}
-  searchTimer=setTimeout(async()=>{
-    const res=await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=5`);
-    const list=await res.json();
-    resultsBox.innerHTML=list.map(r=>`<div data-lat="${r.lat}" data-lon="${r.lon}">${r.display_name}</div>`).join('');
-    resultsBox.style.display="block";
-  },300);
-});
-resultsBox.addEventListener('click',e=>{
-  const el=e.target.closest('div');if(!el)return;
-  selected={lat:parseFloat(el.dataset.lat),lng:parseFloat(el.dataset.lon)};
-  searchBox.value=el.textContent;
-  resultsBox.style.display="none";
-  confirmBtn.disabled=false;
-});
-document.getElementById('confirmDest').addEventListener('click',()=>{
-  apiKey=document.getElementById('apiKey').value.trim();
-  if(!apiKey){alert("Please enter ORS API key");return;}
-  if(!selected){alert("Pick a destination");return;}
-  destination=selected;
-  document.getElementById('overlay').style.display="none";
-  document.getElementById('app').style.display="flex";
-  startGPS();
-});
-
-/* GPS */
-function startGPS(){
-  if(!navigator.geolocation)return;
-  navigator.geolocation.watchPosition(onPos,console.error,{enableHighAccuracy:true});
-}
-async function onPos(pos){
-  const {latitude,longitude,speed}=pos.coords;
-  const cur=[latitude,longitude];
-  currentMarker.setLatLng(cur);
-
-  if(lastPos){
-    const dt=(pos.timestamp-lastTime)/1000;
-    if(dt>0) speedMS=haversine(lastPos,cur)/dt;
-  }
-  lastPos=cur; lastTime=pos.timestamp;
-
-  if(destination && !routeCoords.length){
-    await routeFromTo({lat:latitude,lng:longitude},destination);
-  }
-
-  updateStats(cur,speed||speedMS);
-
-  // Smooth auto-follow (slow pan, not instant jump)
-  if(following){
-    map.panTo(cur,{animate:true,duration:1.2});
-  }
-}
-
-/* Routing */
-async function routeFromTo(from,to){
-  const body={coordinates:[[from.lng,from.lat],[to.lng,to.lat]]};
-  const res=await fetch(`https://api.openrouteservice.org/v2/directions/cycling-regular`,{
-    method:'POST',headers:{'Authorization':apiKey,'Content-Type':'application/json'},body:JSON.stringify(body)});
-  const data=await res.json();
-  const route=data.routes[0];
-  routeCoords=decodeGeometry(route.geometry);
-  routeLayer.setLatLngs(routeCoords);
-  totalDistanceM=route.summary.distance;
-  routeDurationS=route.summary.duration;
-  // Fit to full route initially
-  map.fitBounds(routeLayer.getBounds(), {padding:[40,40]});
-}
-function updateStats(cur,spd){
-  document.getElementById('spd').innerHTML=(spd*3.6).toFixed(1)+" <span class='unit'>km/h</span>";
-  if(!routeCoords.length)return;
-  let distLeft=0;for(let i=0;i<routeCoords.length-1;i++)distLeft+=haversine(routeCoords[i],routeCoords[i+1]);
-  document.getElementById('left').textContent=fmtKm(distLeft)+" km";
-  document.getElementById('total').textContent=fmtKm(totalDistanceM)+" km";
-  const eta=spd>0?distLeft/spd:routeDurationS;
-  document.getElementById('eta').textContent=fmtTime(eta)+" ("+fmtClock(eta)+")";
-}
-</script>
-</body>
-                                                              </html>
+<!DOCTYPE html>
+<html>
+    <head>
+        <title></title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+        <script src="https://unpkg.com/@mapbox/polyline@1.1.1/src/polyline.js"></script>
+        <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;800&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.1/css/all.min.css"/>
+        <style>
+            * {
+                border: 0;
+                padding: 0;
+                margin: 0;
+                outline: none;
+                user-select: none;
+                font-family: "IBM Plex Mono", monospace;
+            }
+            body {
+                background-color: #0e0e0e;
+                color: #e0e0e0;
+                position: absolute;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+            }
+            .logo {
+                position: fixed;
+                top: 8px;
+                left: 0;
+                right: 0;
+                text-align: center;
+                color: rgba(255, 255, 255, 0.5);
+                font-size: calc(16px/1.25);
+                font-weight: 400;
+                letter-spacing: calc(-16px/30);
+                z-index: 10000;
+                text-transform: uppercase;
+            }
+            #map {
+                width: 100%;
+                height: calc(100% - 222px);
+                background-color: #000000
+            }
+            #map .leaflet-control-zoom, #map .leaflet-control-attribution {
+                display: none;
+            }
+            #start-button {
+                background-color: #e0e0e0;
+                color: #0e0e0e;
+                padding: calc(16px/1.5) 0px;
+                width: 100%;
+                font-weight: 600;
+                font-size: 16px;
+            }
+            ul {
+                margin: 32px;
+                list-style-type: none;
+                display: none;
+            }
+            ul li {
+                text-align: center;
+                margin: 32px 0px;
+            }
+            ul li h1 {
+                font-size: 16px;
+                line-height: 16px;
+                margin: calc(16px/1.5) 0px;
+                font-weight: 400;
+            }
+            ul li p {
+                font-size: 32px;
+                line-height: 32px;
+                font-weight: 600;
+            }
+            ul li#stability {
+                display: none;
+            }
+            ul li #statistics-stability-progress {
+                width: 100%; 
+                height: 16px;
+                display: flex;
+                margin-bottom: 8px;
+                background-color: rgba(0, 0, 0, 0.5)
+            }
+            ul li #statistics-stability-progress div {
+                height: 100%;
+                width: 0%;
+                transition: width 0.75s
+            }
+            ul li div:has(#statistics-stability-arrow) {
+                position: relative;
+                width: 100%;
+                height: 16px;
+                margin-left: -8px;
+                margin-right: 8px;
+            }
+            ul li #statistics-stability-arrow {
+                position: absolute;
+                left: 0;
+                width: 0; 
+                height: 0; 
+                border-left: 8px solid transparent;
+                border-right: 8px solid transparent;
+                border-bottom: 16px solid #e0e0e0;
+                transition: left 0.25s;
+            }
+        </style>
+    </head>
+    <body>
+        <h1 class="logo">Bike Computer</h1>
+        <div id="map"></div>
+        <button id="start-button"><i class="fa-solid fa-play"></i> Start</button>
+        <ul class="statistics">
+            <li>
+                <h1>Speed (km/h)</h1>
+                <p id="statistics-speed">0.00</p>
+            </li>
+            <li id="stability">
+                <h1>Stability</h1>
+                <div id="statistics-stability-progress">
+                    <div style="background-color: #0099E1"></div>
+                    <div style="background-color: #00D166"></div>
+                    <div style="background-color: #A652BB"></div>
+                </div>
+                <div>
+                    <div id="statistics-stability-arrow"></div>
+                </div>
+            </li>
+        </ul>
+    </body>
+    <script>
+        function haversine(a,b){
+            const R=6371000, toRad=d=>d*Math.PI/180;
+            const dLat=toRad(b[0]-a[0]), dLng=toRad(b[1]-a[1]);
+            const s1=Math.sin(dLat/2), s2=Math.sin(dLng/2);
+            const A = s1*s1 + Math.cos(toRad(a[0]))*Math.cos(toRad(b[0]))*s2*s2;
+            return 2*R*Math.atan2(Math.sqrt(A), Math.sqrt(1-A));
+        }
+        window.addEventListener("load", () => {
+            document.getElementById("start-button").onclick = function() {
+                if (!navigator.geolocation) return
+                let map = L.map('map', { zoomControl: true, worldCopyJump:true }).setView([1.29,103.85],17)
+                L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                    attribution:'© OpenStreetMap & CARTO', maxZoom:20, subdomains:['a','b','c','d']
+                }).addTo(map)
+                const currentMarker = L.circleMarker([0,0], { radius:6, color:'#41d18e', fillOpacity:1 }).addTo(map)
+                const trackLayer = L.polyline([], { color:'#41d18e', weight:4, opacity:0.9 }).addTo(map)
+                let trackCoords = []
+                let stability = []
+                last = null
+                navigator.geolocation.watchPosition(function(position){
+                    current = [position.coords.latitude, position.coords.longitude, Date.now()]
+                    if (last) {
+                        distance = haversine(last, current)
+                        if (distance > 1.65 && distance < 30) {
+                            trackCoords.push(current)
+                            trackLayer.setLatLngs(trackCoords)
+                            map.fitBounds(trackLayer.getBounds(), { padding:[40,40] })
+                            speed = position.coords.speed || haversine([trackCoords[trackCoords.length-2][0], trackCoords[trackCoords.length-2][1]], [trackCoords[trackCoords.length-1][0], trackCoords[trackCoords.length-1][1]])/((trackCoords[trackCoords.length-1][2] - trackCoords[trackCoords.length-2][2])/1000)
+                            if (speed > 0) {
+                                if (parseFloat(speed) !== stability[stability.length-1]) stability.push(parseFloat(speed))
+                                if (stability.length > 2) {
+                                    range = [[0, 0, 0], Math.max(...stability), Math.min(...stability), document.getElementById("statistics-stability-progress").getElementsByTagName("div")]
+                                    stability.forEach((entry) => {
+                                        if (entry !== range[1] || entry !== range[2]) {
+                                            range[0][Math.round(((entry - range[2])/(range[1] - range[2])) * 2)] += 1
+                                        }
+                                    })
+                                    range[0].forEach((entry, index) => {
+                                        range[3][index].style.width = ((entry/stability.length) * 100) + "%"
+                                    })
+                                    document.getElementById("statistics-stability-arrow").style.left = (((speed - range[2])/(range[1] - range[2])) * 100) + "%"
+                                    document.getElementById("stability").style.display = "block"
+                                }
+                            }
+                            document.getElementById("statistics-speed").textContent = ((speed/1000) * 3600).toFixed(2)
+                            currentMarker.setLatLng(current)
+                        }
+                        try {
+                            map.panTo(current, { animate: true, duration: 1.1 })
+                        } catch {
+                            map.setView(current)
+                        }
+                    } else {
+                        map.setView(current)
+                    }
+                    last = current
+                    console.log("updated.")
+                }, console.error, { enableHighAccuracy: true, maximumAge: 1000, timeout: 1000 })
+                document.getElementById("start-button").style.display = "none"
+                document.getElementsByClassName("statistics")[0].style.display = "block"
+            }
+        })
+    </script>
+</html>

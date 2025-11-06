@@ -1,0 +1,20 @@
+{
+    "name": "bike-computer",
+    "short_name": "bike-computer",
+    "start_url": "/bikecomputer",
+    "display": "standalone",
+    "background_color": "#FFFFFF",
+    "theme_color": "#0e0e0e",
+    "icons": [
+      {
+        "src": "./icon192.png",
+        "sizes": "192x192",
+        "type": "image/png"
+      },
+      {
+        "src": "./icon512.png",
+        "sizes": "512x512",
+        "type": "image/png"
+      }
+    ]
+}

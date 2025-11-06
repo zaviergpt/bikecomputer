@@ -1,13 +1,14 @@
 <!DOCTYPE html>
 <html>
     <head>
-        <title></title>
+        <title>Bike-Computer</title>
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
         <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
         <script src="https://unpkg.com/@mapbox/polyline@1.1.1/src/polyline.js"></script>
         <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;800&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.1/css/all.min.css"/>
+        <link rel="manifest" href="./manifest.json">
         <style>
             * {
                 border: 0;
@@ -85,6 +86,7 @@
                 text-align: center;
                 margin: 32px 0px;
                 display: none;
+                text-shadow: 0px 0px 2.5px rgba(0, 0, 0, 0.25)
             }
             ul.statistics li h1 {
                 font-size: calc(16px/1.25);
@@ -208,6 +210,8 @@
             } else if (type === "establishing-gps") {
                 document.getElementById("status").style = "opacity: 1; background-color: #1e1e1e; color: #FFFFFF;"
                 document.getElementById("status").textContent = "Establishing GPS"
+            } else if (type === "enroute") {
+                document.getElementById("status").style = "opacity: 0"
             }
             beforestatus = type
         }
@@ -230,12 +234,12 @@
                         current = [position.coords.latitude, position.coords.longitude, Date.now()]
                         if (last) {
                             distance = haversine(last, current)
-                            if (distance > 1.65 && distance < 30) {
+                            if (distance > (1.65)/1.25 && distance < 30) {
                                 totaldistance[0] += distance
                                 speed = position.coords.speed || (trackCoords.length > 2 ? haversine([trackCoords[trackCoords.length-2][0], trackCoords[trackCoords.length-2][1]], [trackCoords[trackCoords.length-1][0], trackCoords[trackCoords.length-1][1]])/((trackCoords[trackCoords.length-1][2] - trackCoords[trackCoords.length-2][2])/1000) : 0)
                                 if (speed > 0) {
                                     if (parseFloat(speed) !== stability[stability.length-1]) stability.push(parseFloat(speed))
-                                    if (stability.length > 2) {
+                                    if (stability.length > 0) {
                                         range = [[0, 0, 0], Math.max(...stability), Math.min(...stability), document.getElementById("statistics-stability-progress").getElementsByTagName("div")]
                                         stability.forEach((entry) => {
                                             if (entry !== range[1] || entry !== range[2]) {
@@ -251,11 +255,15 @@
                                         document.getElementById("statistics-stability-arrow").style.left = (((speed - range[2])/(range[1] - range[2])) * 100) + "%"
                                         document.getElementById("statistics-speed").textContent = ((speed/1000) * 3600).toFixed(1)
                                         document.getElementById("statistics-distance-enroute").textContent = (totaldistance[0]/1000).toFixed(2)
-                                        if (stability.length-2 === 1) status("gps-established")
                                         statistics("enroute")
+                                        status("enroute")
+                                    }
+                                    if (stability.length === 1) {
+                                        status("gps-established")
+                                        document.getElementById("stability").style.display = "none"
                                     }
                                 }
-                            } else if (stability.length > 2) {
+                            } else if (stability.length > 0) {
                                 document.getElementById("statistics-speed").textContent = "0.0"
                                 document.getElementById("statistics-distance-paused").textContent = (totaldistance[0]/1000).toFixed(2)
                                 statistics("paused")
@@ -273,7 +281,7 @@
                         last = current
                         console.log("updated.")
                     }
-                }, console.error, { enableHighAccuracy: true, maximumAge: 1000, timeout: 1000 })
+                }, console.error, { enableHighAccuracy: true, maximumAge: 500, timeout: 500 })
                 document.getElementById("start-button").style.display = "none"
                 document.getElementsByClassName("statistics")[0].style.display = "block"
                 status("establishing-gps")

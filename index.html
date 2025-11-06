@@ -25,12 +25,18 @@
                 left: 0;
                 right: 0;
                 bottom: 0;
+                overflow: hidden;
+                text-transform: uppercase;
             }
-            .logo {
+            .header {
                 position: fixed;
-                top: 8px;
+                top: 0;
                 left: 0;
                 right: 0;
+                z-index: 10000;
+            }
+            .header .logo {
+                padding: 8px 0px;
                 text-align: center;
                 color: rgba(255, 255, 255, 0.5);
                 font-size: calc(16px/1.25);
@@ -39,65 +45,81 @@
                 z-index: 10000;
                 text-transform: uppercase;
             }
+            .header #status {
+                opacity: 0;
+                text-align: center;
+                font-size: calc(16px/1.25);
+                padding: 8px 0px;
+                font-weight: 600;
+                transition: background-color 0.5s, opacity 0.25s;
+            }
             #map {
                 width: 100%;
-                height: calc(100% - 222px);
-                background-color: #000000
+                height: 100%;
+                background-color: #000000;
             }
             #map .leaflet-control-zoom, #map .leaflet-control-attribution {
                 display: none;
             }
             #start-button {
+                position: fixed;
+                bottom: 32px;
+                left: 32px;
+                right: 32px;
                 background-color: #e0e0e0;
                 color: #0e0e0e;
                 padding: calc(16px/1.5) 0px;
-                width: 100%;
                 font-weight: 600;
                 font-size: 16px;
             }
-            ul {
-                margin: 32px;
+            ul.statistics {
+                position: fixed;
+                bottom: 0px;
+                left: 32px;
+                right: 32px;
                 list-style-type: none;
                 display: none;
+                z-index: 1000;
             }
-            ul li {
+            ul.statistics li {
                 text-align: center;
                 margin: 32px 0px;
+                display: none;
             }
-            ul li h1 {
-                font-size: 16px;
-                line-height: 16px;
-                margin: calc(16px/1.5) 0px;
+            ul.statistics li h1 {
+                font-size: calc(16px/1.25);
+                line-height: calc(16px/1.25);
+                margin: calc(16px/2) 0px;
                 font-weight: 400;
             }
-            ul li p {
+            ul.statistics li p {
                 font-size: 32px;
                 line-height: 32px;
                 font-weight: 600;
             }
-            ul li#stability {
+            ul.statistics li#stability {
                 display: none;
             }
-            ul li #statistics-stability-progress {
+            ul.statistics li #statistics-stability-progress {
                 width: 100%; 
                 height: 16px;
                 display: flex;
                 margin-bottom: 8px;
                 background-color: rgba(0, 0, 0, 0.5)
             }
-            ul li #statistics-stability-progress div {
+            ul.statistics li #statistics-stability-progress div {
                 height: 100%;
                 width: 0%;
                 transition: width 0.75s
             }
-            ul li div:has(#statistics-stability-arrow) {
+            ul.statistics li div:has(#statistics-stability-arrow) {
                 position: relative;
                 width: 100%;
                 height: 16px;
                 margin-left: -8px;
                 margin-right: 8px;
             }
-            ul li #statistics-stability-arrow {
+            ul.statistics li #statistics-stability-arrow {
                 position: absolute;
                 left: 0;
                 width: 0; 
@@ -110,15 +132,34 @@
         </style>
     </head>
     <body>
-        <h1 class="logo">Bike Computer</h1>
+        <ul class="header">
+            <li class="logo">Version 1.0.0</li>
+            <li id="status"></li>
+        </ul>
         <div id="map"></div>
-        <button id="start-button"><i class="fa-solid fa-play"></i> Start</button>
+        <button id="start-button"><i class="fa-solid fa-play"></i> Start Journey</button>
         <ul class="statistics">
-            <li>
-                <h1>Speed (km/h)</h1>
-                <p id="statistics-speed">0.00</p>
+            <li class="enroute">
+                <div style="display: flex; align-items: center; justify-content: center; width: 100%">
+                    <div style="width: 50%">
+                        <h1>Speed (km/h)</h1>
+                        <p id="statistics-speed">0.0</p>
+                    </div>
+                    <div style="width: 50%">
+                        <h1>Distance (km)</h1>
+                        <p id="statistics-distance-enroute">0.00</p>
+                    </div>
+                </div>
             </li>
-            <li id="stability">
+            <li class="paused">
+                <div style="display: flex; align-items: center; justify-content: center; width: 100%">
+                    <div style="width: 100%">
+                        <h1>Distance (km)</h1>
+                        <p id="statistics-distance-paused">0.00</p>
+                    </div>
+                </div>
+            </li>
+            <li class="enroute" id="stability">
                 <h1>Stability</h1>
                 <div id="statistics-stability-progress">
                     <div style="background-color: #0099E1"></div>
@@ -139,8 +180,40 @@
             const A = s1*s1 + Math.cos(toRad(a[0]))*Math.cos(toRad(b[0]))*s2*s2;
             return 2*R*Math.atan2(Math.sqrt(A), Math.sqrt(1-A));
         }
+        function statistics(type) {
+            items = document.getElementsByClassName("statistics")[0].getElementsByTagName("li")
+            for (var item in items) {
+                item = items[item]
+                if (item.className) {
+                    if (item.className.split(" ").includes(type)) {
+                        item.style.display = "block"
+                    } else {
+                        item.style.display = "none"
+                    }
+                }
+            }
+        }
+        beforestatus = null
+        function status(type) {
+            if (beforestatus === type) return
+            if (type === "gps-established") {
+                document.getElementById("status").style = "opacity: 1; background-color: #00D166; color: #FFFFFF"
+                document.getElementById("status").textContent = "GPS Established Successfully"
+                setTimeout(function(){
+                    document.getElementById("status").style = "opacity: 0"
+                }, 2500)
+            } else if (type === "paused") {
+                document.getElementById("status").style = "opacity: 1; background-color: #F8C300; color: #FFFFFF"
+                document.getElementById("status").textContent = "Session Paused"
+            } else if (type === "establishing-gps") {
+                document.getElementById("status").style = "opacity: 1; background-color: #1e1e1e; color: #FFFFFF;"
+                document.getElementById("status").textContent = "Establishing GPS"
+            }
+            beforestatus = type
+        }
         window.addEventListener("load", () => {
-            document.getElementById("start-button").onclick = function() {
+            document.getElementById("start-button").onclick = async function() {
+                await navigator.wakeLock.request()
                 if (!navigator.geolocation) return
                 let map = L.map('map', { zoomControl: true, worldCopyJump:true }).setView([1.29,103.85],17)
                 L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
@@ -150,48 +223,60 @@
                 const trackLayer = L.polyline([], { color:'#41d18e', weight:4, opacity:0.9 }).addTo(map)
                 let trackCoords = []
                 let stability = []
+                let totaldistance = [0, 0]
                 last = null
                 navigator.geolocation.watchPosition(function(position){
-                    current = [position.coords.latitude, position.coords.longitude, Date.now()]
-                    if (last) {
-                        distance = haversine(last, current)
-                        if (distance > 1.65 && distance < 30) {
-                            trackCoords.push(current)
-                            trackLayer.setLatLngs(trackCoords)
-                            map.fitBounds(trackLayer.getBounds(), { padding:[40,40] })
-                            speed = position.coords.speed || haversine([trackCoords[trackCoords.length-2][0], trackCoords[trackCoords.length-2][1]], [trackCoords[trackCoords.length-1][0], trackCoords[trackCoords.length-1][1]])/((trackCoords[trackCoords.length-1][2] - trackCoords[trackCoords.length-2][2])/1000)
-                            if (speed > 0) {
-                                if (parseFloat(speed) !== stability[stability.length-1]) stability.push(parseFloat(speed))
-                                if (stability.length > 2) {
-                                    range = [[0, 0, 0], Math.max(...stability), Math.min(...stability), document.getElementById("statistics-stability-progress").getElementsByTagName("div")]
-                                    stability.forEach((entry) => {
-                                        if (entry !== range[1] || entry !== range[2]) {
-                                            range[0][Math.round(((entry - range[2])/(range[1] - range[2])) * 2)] += 1
-                                        }
-                                    })
-                                    range[0].forEach((entry, index) => {
-                                        range[3][index].style.width = ((entry/stability.length) * 100) + "%"
-                                    })
-                                    document.getElementById("statistics-stability-arrow").style.left = (((speed - range[2])/(range[1] - range[2])) * 100) + "%"
-                                    document.getElementById("stability").style.display = "block"
+                    if (position.coords.accuracy < 30) {
+                        current = [position.coords.latitude, position.coords.longitude, Date.now()]
+                        if (last) {
+                            distance = haversine(last, current)
+                            if (distance > 1.65 && distance < 30) {
+                                totaldistance[0] += distance
+                                speed = position.coords.speed || (trackCoords.length > 2 ? haversine([trackCoords[trackCoords.length-2][0], trackCoords[trackCoords.length-2][1]], [trackCoords[trackCoords.length-1][0], trackCoords[trackCoords.length-1][1]])/((trackCoords[trackCoords.length-1][2] - trackCoords[trackCoords.length-2][2])/1000) : 0)
+                                if (speed > 0) {
+                                    if (parseFloat(speed) !== stability[stability.length-1]) stability.push(parseFloat(speed))
+                                    if (stability.length > 2) {
+                                        range = [[0, 0, 0], Math.max(...stability), Math.min(...stability), document.getElementById("statistics-stability-progress").getElementsByTagName("div")]
+                                        stability.forEach((entry) => {
+                                            if (entry !== range[1] || entry !== range[2]) {
+                                                range[0][Math.round(((entry - range[2])/(range[1] - range[2])) * 2)] += 1
+                                            }
+                                        })
+                                        range[0].forEach((entry, index) => {
+                                            range[3][index].style.width = ((entry/stability.length) * 100) + "%"
+                                        })
+                                        trackCoords.push(current)
+                                        trackLayer.setLatLngs(trackCoords)
+                                        map.fitBounds(trackLayer.getBounds(), { padding:[40,40] })
+                                        document.getElementById("statistics-stability-arrow").style.left = (((speed - range[2])/(range[1] - range[2])) * 100) + "%"
+                                        document.getElementById("statistics-speed").textContent = ((speed/1000) * 3600).toFixed(1)
+                                        document.getElementById("statistics-distance-enroute").textContent = (totaldistance[0]/1000).toFixed(2)
+                                        if (stability.length-2 === 1) status("gps-established")
+                                        statistics("enroute")
+                                    }
                                 }
+                            } else if (stability.length > 2) {
+                                document.getElementById("statistics-speed").textContent = "0.0"
+                                document.getElementById("statistics-distance-paused").textContent = (totaldistance[0]/1000).toFixed(2)
+                                statistics("paused")
+                                status("paused")
                             }
-                            document.getElementById("statistics-speed").textContent = ((speed/1000) * 3600).toFixed(2)
-                            currentMarker.setLatLng(current)
-                        }
-                        try {
-                            map.panTo(current, { animate: true, duration: 1.1 })
-                        } catch {
+                            try {
+                                map.panTo(current, { animate: true, duration: 1.1 })
+                            } catch {
+                                map.setView(current)
+                            }
+                        } else {
                             map.setView(current)
                         }
-                    } else {
-                        map.setView(current)
+                        currentMarker.setLatLng(current)
+                        last = current
+                        console.log("updated.")
                     }
-                    last = current
-                    console.log("updated.")
                 }, console.error, { enableHighAccuracy: true, maximumAge: 1000, timeout: 1000 })
                 document.getElementById("start-button").style.display = "none"
                 document.getElementsByClassName("statistics")[0].style.display = "block"
+                status("establishing-gps")
             }
         })
     </script>
